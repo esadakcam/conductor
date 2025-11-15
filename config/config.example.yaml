@@ -1,3 +1,10 @@
+name: ctrl1
+
+db:
+  - http://localhost:2379
+  - http://localhost:2479
+  - http://localhost:2579
+
 tasks:
   # Example: When some endpoint returns < 10, then call someOtherEndpoint
   - when:

@@ -1,4 +1,4 @@
-.PHONY: build run clean test test-coverage fmt fmt-check vet mod mod-download mod-verify help
+.PHONY: build run clean test test-coverage fmt fmt-check vet mod mod-download mod-verify docker-up docker-down docker-logs docker-ps docker-restart docker-stop help
 
 # Binary name
 BINARY_NAME=conductor
@@ -76,6 +76,38 @@ mod:
 	@echo "Tidying dependencies..."
 	@go mod tidy
 	@go mod verify
+
+## docker-up: Start the etcd cluster
+docker-up:
+	@echo "Starting etcd cluster..."
+	@cd deployment && docker-compose up -d
+	@echo "Etcd cluster started"
+
+## docker-down: Stop and remove the etcd cluster
+docker-down:
+	@echo "Stopping etcd cluster..."
+	@cd deployment && docker-compose down
+	@echo "Etcd cluster stopped"
+
+## docker-stop: Stop the etcd cluster (without removing containers)
+docker-stop:
+	@echo "Stopping etcd cluster..."
+	@cd deployment && docker-compose stop
+	@echo "Etcd cluster stopped"
+
+## docker-restart: Restart the etcd cluster
+docker-restart:
+	@echo "Restarting etcd cluster..."
+	@cd deployment && docker-compose restart
+	@echo "Etcd cluster restarted"
+
+## docker-logs: Show etcd cluster logs
+docker-logs:
+	@cd deployment && docker-compose logs -f
+
+## docker-ps: Show running etcd containers
+docker-ps:
+	@cd deployment && docker-compose ps
 
 ## help: Show this help message
 help:

@@ -53,3 +53,5 @@ type ActionEndpoint struct {
 	Headers  map[string]string `yaml:"headers,omitempty"`
 	Body     string            `yaml:"body,omitempty"`
 }
+
+// TODO: Add k8s related actions
