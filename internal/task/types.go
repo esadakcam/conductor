@@ -36,7 +36,7 @@ type ConditionEndpointSuccess struct {
 	Type         ConditionType `yaml:"type"`
 	Endpoint     string        `yaml:"endpoint"`
 	ResponseBody string        `yaml:"response,omitempty"`
-	Status       int           `yaml:"status"`
+	Status       int           `yaml:"status,omitempty"`
 }
 
 type ConditionEndpointValue struct {
