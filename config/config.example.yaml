@@ -1,0 +1,25 @@
+tasks:
+  # Example: When some endpoint returns < 10, then call someOtherEndpoint
+  - when:
+      type: "endpoint"
+      endpoint: "https://api.example.com/someEndpoint"
+      operator: "<"
+      value: 10
+    then:
+      type: "endpoint"
+      endpoint: "https://api.example.com/someOtherEndpoint"
+      method: "GET"
+
+  # Another example with POST request
+  - when:
+      type: "endpoint"
+      endpoint: "https://api.example.com/metrics/count"
+      operator: ">="
+      value: 100
+    then:
+      type: "endpoint"
+      endpoint: "https://api.example.com/notify"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+      body: '{"alert": "Threshold exceeded"}'
