@@ -131,12 +131,14 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 		var reason error
 		select {
 		case <-session.Done():
+			//TODO: Cancel leader function
 			reason = errors.New("leadership lost")
 		case <-ctx.Done():
 			reason = ctx.Err()
 		}
 
 		cancel()
+		//TODO: Cancel leader function
 		<-done
 
 		resignCtx, resignCancel := context.WithTimeout(context.Background(), 2*time.Second)
