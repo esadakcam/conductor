@@ -7,13 +7,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
-
-	clientv3 "go.etcd.io/etcd/client/v3"
-	"gopkg.in/yaml.v3"
 
 	"github.com/esadakcam/conductor/internal/cluster"
 	"github.com/esadakcam/conductor/internal/task"
+	"github.com/esadakcam/conductor/internal/utils"
 )
 
 func main() {
@@ -40,34 +37,23 @@ func main() {
 	}
 
 	// Read etcd endpoints from config file
-	etcdEndpoints, err := getEtcdEndpoints(configPath)
+	etcdEndpoints, err := utils.GetEtcdEndpoints(configPath)
 	if err != nil {
 		log.Fatalf("Failed to get etcd endpoints: %v", err)
 	}
 
-	// Create etcd client
-	etcdClient, err := clientv3.New(clientv3.Config{
-		Endpoints:   etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	// Read name from config file
+	name, err := utils.GetName(configPath)
 	if err != nil {
-		log.Fatalf("Failed to create etcd client: %v", err)
+		log.Fatalf("Failed to get name: %v", err)
 	}
-	defer etcdClient.Close()
 
-	// Generate a unique leader ID
-	hostname, _ := os.Hostname()
-	leaderID := fmt.Sprintf("%s-%d", hostname, os.Getpid())
-
-	// Create leader elector
-	elector, err := cluster.NewLeaderElector(cluster.Config{
-		Client:   etcdClient,
-		ID:       leaderID,
-		Prefix:   "/conductor/leader",
-		EpochKey: "/conductor/epoch",
-		LeaseTTL: 10,
+	// Initialize leader election
+	elector, etcdClient, err := cluster.NewLeaderElector(cluster.Config{
+		EtcdEndpoints: etcdEndpoints,
+		Name:          name,
 		LeaderFn: func(ctx context.Context, epoch int64) error {
-			log.Printf("🎯 Acquired leadership! Epoch: %d", epoch)
+			log.Printf("Acquired leadership! Epoch: %d", epoch)
 			log.Printf("Executing %d tasks...", len(config.Tasks))
 
 			// Execute tasks as the leader
@@ -96,39 +82,17 @@ func main() {
 			log.Printf("Leadership lost or cancelled")
 			return ctx.Err()
 		},
-		Backoff: time.Second,
 	})
 	if err != nil {
-		log.Fatalf("Failed to create leader elector: %v", err)
+		log.Fatalf("Failed to initialize leader election: %v", err)
 	}
+	defer etcdClient.Close()
 
-	log.Printf("Participating in leader election (ID: %s)...", leaderID)
+	log.Printf("Participating in leader election (ID: %s)...", name)
 	if err := elector.Run(ctx); err != nil {
 		if err != context.Canceled {
 			log.Fatalf("Leader election error: %v", err)
 		}
 		log.Println("Leader election stopped")
 	}
-}
-
-// getEtcdEndpoints reads etcd endpoints from the config file
-func getEtcdEndpoints(configPath string) ([]string, error) {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	var config struct {
-		DB []string `yaml:"db"`
-	}
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
-	}
-
-	if len(config.DB) == 0 {
-		// Default to localhost endpoints if not specified
-		return []string{"http://localhost:2379", "http://localhost:2479", "http://localhost:2579"}, nil
-	}
-
-	return config.DB, nil
 }

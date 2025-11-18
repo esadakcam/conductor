@@ -32,50 +32,75 @@ type LeaderElector struct {
 
 // Config defines the inputs required to build a LeaderElector.
 type Config struct {
-	Client   *clientv3.Client
-	ID       string
-	Prefix   string
+	// EtcdEndpoints are the etcd endpoints. Required.
+	EtcdEndpoints []string
+	// Name is the unique identifier for this elector. Required.
+	Name string
+	// Prefix is the etcd key prefix for the election. Defaults to "/conductor/leader" if empty.
+	Prefix string
+	// EpochKey is the etcd key for storing the epoch. Defaults to "/conductor/epoch" if empty.
 	EpochKey string
+	// LeaseTTL is the TTL for the lease in seconds. Defaults to 10 if <= 0.
 	LeaseTTL int
+	// LeaderFn is the function to execute when leadership is acquired. Required.
 	LeaderFn LeaderFunc
-	Backoff  time.Duration
+	// Backoff is the duration to wait before retrying on errors. Defaults to 1 second if 0.
+	Backoff time.Duration
 }
 
-// NewLeaderElector validates the config and returns a ready to use LeaderElector.
-func NewLeaderElector(cfg Config) (*LeaderElector, error) {
-	if cfg.Client == nil {
-		return nil, errors.New("client is required")
-	}
-	if cfg.ID == "" {
-		return nil, errors.New("id is required")
-	}
-	if cfg.Prefix == "" {
-		return nil, errors.New("prefix is required")
-	}
-	if cfg.EpochKey == "" {
-		return nil, errors.New("epoch key is required")
-	}
-	if cfg.LeaseTTL <= 0 {
-		return nil, errors.New("lease ttl must be greater than zero")
-	}
-	if cfg.LeaderFn == nil {
-		return nil, errors.New("leader function is required")
+// NewLeaderElector validates the config, creates an etcd client, and returns a ready to use LeaderElector.
+// Returns the LeaderElector and the etcd client (which should be closed by the caller).
+func NewLeaderElector(cfg Config) (*LeaderElector, *clientv3.Client, error) {
+	if len(cfg.EtcdEndpoints) == 0 {
+		return nil, nil, errors.New("etcd endpoints are required")
 	}
 
+	client, err := clientv3.New(clientv3.Config{
+		Endpoints:   cfg.EtcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create etcd client: %w", err)
+	}
+
+	if cfg.Name == "" {
+		client.Close()
+		return nil, nil, errors.New("name is required")
+	}
+
+	if cfg.LeaderFn == nil {
+		client.Close()
+		return nil, nil, errors.New("leader function is required")
+	}
+
+	prefix := cfg.Prefix
+	if prefix == "" {
+		prefix = "/conductor/leader"
+	}
+	epochKey := cfg.EpochKey
+	if epochKey == "" {
+		epochKey = "/conductor/epoch"
+	}
+	leaseTTL := cfg.LeaseTTL
+	if leaseTTL <= 0 {
+		leaseTTL = 10
+	}
 	backoff := cfg.Backoff
 	if backoff == 0 {
 		backoff = time.Second
 	}
 
-	return &LeaderElector{
-		client:   cfg.Client,
-		id:       cfg.ID,
-		prefix:   cfg.Prefix,
-		epochKey: cfg.EpochKey,
-		leaseTTL: cfg.LeaseTTL,
+	elector := &LeaderElector{
+		client:   client,
+		id:       cfg.Name,
+		prefix:   prefix,
+		epochKey: epochKey,
+		leaseTTL: leaseTTL,
 		leaderFn: cfg.LeaderFn,
 		backoff:  backoff,
-	}, nil
+	}
+
+	return elector, client, nil
 }
 
 // Run blocks while participating in election until the context is cancelled.
