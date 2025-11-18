@@ -106,12 +106,6 @@ func NewLeaderElector(cfg Config) (*LeaderElector, *clientv3.Client, error) {
 // Run blocks while participating in election until the context is cancelled.
 func (e *LeaderElector) Run(ctx context.Context) error {
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
 		session, err := concurrency.NewSession(
 			e.client,
 			concurrency.WithTTL(e.leaseTTL),
@@ -156,14 +150,13 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 		var reason error
 		select {
 		case <-session.Done():
-			//TODO: Cancel leader function
 			reason = errors.New("leadership lost")
 		case <-ctx.Done():
 			reason = ctx.Err()
 		}
 
 		cancel()
-		//TODO: Cancel leader function
+		// The leader function should watch leaderCtx. Done channel is waited leader function to exit.
 		<-done
 
 		resignCtx, resignCancel := context.WithTimeout(context.Background(), 2*time.Second)
