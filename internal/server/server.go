@@ -69,4 +69,3 @@ func (s *Server) Run(ctx context.Context) error {
 		return s.Shutdown(shutdownCtx)
 	}
 }
-

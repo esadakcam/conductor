@@ -74,4 +74,3 @@ type ServerConfig struct {
 	Port      int      `yaml:"port"`
 	Followers []string `yaml:"followers"`
 }
-
