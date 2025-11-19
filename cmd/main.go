@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/esadakcam/conductor/internal/cluster"
+	"github.com/esadakcam/conductor/internal/server"
 	"github.com/esadakcam/conductor/internal/task"
 	"github.com/esadakcam/conductor/internal/utils"
 )
@@ -48,6 +49,12 @@ func main() {
 		log.Fatalf("Failed to get name: %v", err)
 	}
 
+	// Read server config
+	serverConfig, err := utils.GetServerConfig(configPath)
+	if err != nil {
+		log.Fatalf("Failed to get server config: %v", err)
+	}
+
 	// Initialize leader election
 	elector, etcdClient, err := cluster.NewLeaderElector(cluster.Config{
 		EtcdEndpoints: etcdEndpoints,
@@ -63,6 +70,28 @@ func main() {
 		log.Fatalf("Failed to initialize leader election: %v", err)
 	}
 	defer etcdClient.Close()
+
+	// Initialize Kubernetes client
+	k8sClient, err := server.NewK8sClient("")
+	if err != nil {
+		log.Fatalf("Failed to initialize Kubernetes client: %v", err)
+	}
+
+	// Initialize Epoch Validator
+	epochValidator := server.NewEpochValidator(etcdClient, "")
+
+	// Initialize HTTP Server
+	srvHandler := server.NewHandler(k8sClient, epochValidator)
+	srv := server.NewServer(server.Config{Port: serverConfig.Port}, srvHandler)
+
+	// Start server in background
+	go func() {
+		log.Printf("Starting HTTP server on port %d", serverConfig.Port)
+		if err := srv.Run(ctx); err != nil {
+			log.Printf("HTTP server error: %v", err)
+			cancel()
+		}
+	}()
 
 	log.Printf("Participating in leader election (ID: %s)...", name)
 	if err := elector.Run(ctx); err != nil {

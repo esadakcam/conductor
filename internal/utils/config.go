@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/esadakcam/conductor/internal/server"
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,4 +49,26 @@ func GetName(configPath string) (string, error) {
 	}
 
 	return config.Name, nil
+}
+
+// GetServerConfig reads the server configuration from the config file
+func GetServerConfig(configPath string) (server.ServerConfig, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return server.ServerConfig{}, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var config struct {
+		Server server.ServerConfig `yaml:"server"`
+	}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return server.ServerConfig{}, fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	// Set default port if not specified
+	if config.Server.Port == 0 {
+		config.Server.Port = 8080
+	}
+
+	return config.Server, nil
 }

@@ -5,6 +5,10 @@ db:
   - http://localhost:2479
   - http://localhost:2579
 
+server:
+  port: 8080
+  followers: []
+
 tasks:
   # Example: When some endpoint returns < 10, then call someOtherEndpoint
   # - when:
@@ -16,7 +20,7 @@ tasks:
   #     type: "endpoint"
   #     endpoint: "https://api.example.com/someOtherEndpoint"
   #     method: "GET"
-
+  #
   # Another example with POST request
   # - when:
   #     type: "endpoint_success"
