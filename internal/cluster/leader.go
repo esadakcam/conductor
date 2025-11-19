@@ -174,7 +174,7 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 
 func (e *LeaderElector) nextEpoch(ctx context.Context) (int64, error) {
 	for {
-		getResp, err := e.client.Get(ctx, e.epochKey)
+		currEpochResp, err := e.client.Get(ctx, e.epochKey)
 		if err != nil {
 			return 0, err
 		}
@@ -184,11 +184,11 @@ func (e *LeaderElector) nextEpoch(ctx context.Context) (int64, error) {
 			next             int64
 		)
 
-		if len(getResp.Kvs) == 0 {
+		if len(currEpochResp.Kvs) == 0 {
 			expectedRevision = 0
 			next = 1
 		} else {
-			currentKV := getResp.Kvs[0]
+			currentKV := currEpochResp.Kvs[0]
 			current, err := strconv.ParseInt(string(currentKV.Value), 10, 64)
 			if err != nil {
 				return 0, fmt.Errorf("invalid epoch value %q: %w", string(currentKV.Value), err)

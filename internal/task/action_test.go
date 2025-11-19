@@ -1,6 +1,7 @@
 package task
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -262,7 +263,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 				tt.action.Endpoint = server.URL
 			}
 
-			err := tt.action.Execute()
+			err := tt.action.Execute(context.Background(), 0)
 
 			if tt.expectedError {
 				if err == nil {
@@ -283,7 +284,7 @@ func TestActionEndpoint_Execute_InvalidEndpoint(t *testing.T) {
 		Method:   "GET",
 	}
 
-	err := action.Execute()
+	err := action.Execute(context.Background(), 0)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -323,7 +324,7 @@ func TestActionEndpoint_Execute_HTTPStatusCodes(t *testing.T) {
 				Method:   "GET",
 			}
 
-			err := action.Execute()
+			err := action.Execute(context.Background(), 0)
 
 			if tc.expectedError {
 				if err == nil {

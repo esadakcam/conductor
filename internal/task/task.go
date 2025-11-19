@@ -2,6 +2,7 @@ package task
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,7 +11,7 @@ import (
 	"time"
 )
 
-func (c *ConditionEndpointSuccess) Evaluate() (bool, error) {
+func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context) (bool, error) {
 	if c.Endpoint == "" {
 		return false, fmt.Errorf("endpoint is required")
 	}
@@ -19,7 +20,12 @@ func (c *ConditionEndpointSuccess) Evaluate() (bool, error) {
 		Timeout: 30 * time.Second,
 	}
 
-	resp, err := client.Get(c.Endpoint)
+	req, err := http.NewRequestWithContext(ctx, "GET", c.Endpoint, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return false, fmt.Errorf("failed to make request to %s: %w", c.Endpoint, err)
 	}
@@ -46,7 +52,7 @@ func (c *ConditionEndpointSuccess) Evaluate() (bool, error) {
 	return true, nil
 }
 
-func (c *ConditionEndpointValue) Evaluate() (bool, error) {
+func (c *ConditionEndpointValue) Evaluate(ctx context.Context) (bool, error) {
 	if c.Endpoint == "" {
 		return false, fmt.Errorf("endpoint is required")
 	}
@@ -55,7 +61,12 @@ func (c *ConditionEndpointValue) Evaluate() (bool, error) {
 		Timeout: 30 * time.Second,
 	}
 
-	resp, err := client.Get(c.Endpoint)
+	req, err := http.NewRequestWithContext(ctx, "GET", c.Endpoint, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return false, fmt.Errorf("failed to make request to %s: %w", c.Endpoint, err)
 	}
@@ -93,6 +104,10 @@ func (c *ConditionEndpointValue) Evaluate() (bool, error) {
 	}
 }
 
+func (c *ConditionAlwaysTrue) Evaluate(ctx context.Context) (bool, error) {
+	return true, nil
+}
+
 func (c *ConditionEndpointSuccess) GetType() ConditionType {
 	return ConditionTypeEndpointSuccess
 }
@@ -101,7 +116,11 @@ func (c *ConditionEndpointValue) GetType() ConditionType {
 	return ConditionTypeEndpointValue
 }
 
-func (a *ActionEndpoint) Execute() error {
+func (c *ConditionAlwaysTrue) GetType() ConditionType {
+	return ConditionTypeAlwaysTrue
+}
+
+func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64) error {
 	if a.Endpoint == "" {
 		return fmt.Errorf("endpoint is required")
 	}
@@ -119,7 +138,7 @@ func (a *ActionEndpoint) Execute() error {
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequest(method, a.Endpoint, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, a.Endpoint, reqBody)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -153,6 +172,15 @@ func (a *ActionEndpoint) Execute() error {
 	return nil
 }
 
+func (a *ActionEcho) Execute(ctx context.Context, epoch int64) error {
+	fmt.Println(a.Message)
+	return nil
+}
+
 func (a *ActionEndpoint) GetType() ActionType {
 	return ActionTypeEndpoint
+}
+
+func (a *ActionEcho) GetType() ActionType {
+	return ActionTypeEcho
 }

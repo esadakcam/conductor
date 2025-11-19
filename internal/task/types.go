@@ -1,16 +1,20 @@
 package task
 
+import "context"
+
 type ConditionType string
 
 const (
 	ConditionTypeEndpointSuccess ConditionType = "endpoint_success"
 	ConditionTypeEndpointValue   ConditionType = "endpoint_value"
+	ConditionTypeAlwaysTrue      ConditionType = "always_true"
 )
 
 type ActionType string
 
 const (
 	ActionTypeEndpoint ActionType = "endpoint"
+	ActionTypeEcho     ActionType = "echo"
 )
 
 type Config struct {
@@ -23,12 +27,12 @@ type Task struct {
 }
 
 type Condition interface {
-	Evaluate() (bool, error)
+	Evaluate(ctx context.Context) (bool, error)
 	GetType() ConditionType
 }
 
 type Action interface {
-	Execute() error
+	Execute(ctx context.Context, epoch int64) error
 	GetType() ActionType
 }
 
@@ -37,6 +41,10 @@ type ConditionEndpointSuccess struct {
 	Endpoint     string        `yaml:"endpoint"`
 	ResponseBody string        `yaml:"response,omitempty"`
 	Status       int           `yaml:"status,omitempty"`
+}
+
+type ConditionAlwaysTrue struct {
+	Type ConditionType `yaml:"type"`
 }
 
 type ConditionEndpointValue struct {
@@ -52,6 +60,11 @@ type ActionEndpoint struct {
 	Method   string            `yaml:"method"` // GET, POST, PUT, DELETE
 	Headers  map[string]string `yaml:"headers,omitempty"`
 	Body     string            `yaml:"body,omitempty"`
+}
+
+type ActionEcho struct {
+	Type    ActionType `yaml:"type"`
+	Message string     `yaml:"message"`
 }
 
 // TODO: Add k8s related actions

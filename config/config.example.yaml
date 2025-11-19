@@ -1,4 +1,4 @@
-name: ctrl1
+name: ctrl2
 
 db:
   - http://localhost:2379
@@ -7,24 +7,29 @@ db:
 
 tasks:
   # Example: When some endpoint returns < 10, then call someOtherEndpoint
-  - when:
-      type: "endpoint_value"
-      endpoint: "https://api.example.com/someEndpoint"
-      operator: "lt"
-      value: 10
-    then:
-      type: "endpoint"
-      endpoint: "https://api.example.com/someOtherEndpoint"
-      method: "GET"
+  # - when:
+  #     type: "endpoint_value"
+  #     endpoint: "https://api.example.com/someEndpoint"
+  #     operator: "lt"
+  #     value: 10
+  #   then:
+  #     type: "endpoint"
+  #     endpoint: "https://api.example.com/someOtherEndpoint"
+  #     method: "GET"
 
   # Another example with POST request
+  # - when:
+  #     type: "endpoint_success"
+  #     endpoint: "https://api.example.com/metrics/count"
+  #   then:
+  #     type: "endpoint"
+  #     endpoint: "https://api.example.com/notify"
+  #     method: "POST"
+  #     headers:
+  #       Content-Type: "application/json"
+  #     body: '{"alert": "Threshold exceeded"}'
   - when:
-      type: "endpoint_success"
-      endpoint: "https://api.example.com/metrics/count"
+      type: "always_true"
     then:
-      type: "endpoint"
-      endpoint: "https://api.example.com/notify"
-      method: "POST"
-      headers:
-        Content-Type: "application/json"
-      body: '{"alert": "Threshold exceeded"}'
+      type: "echo"
+      message: "conductor!"

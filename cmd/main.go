@@ -53,34 +53,10 @@ func main() {
 		EtcdEndpoints: etcdEndpoints,
 		Name:          name,
 		LeaderFn: func(ctx context.Context, epoch int64) error {
-			log.Printf("Acquired leadership! Epoch: %d", epoch)
-			log.Printf("Executing %d tasks...", len(config.Tasks))
-
-			// Execute tasks as the leader
-			for i, t := range config.Tasks {
-				log.Printf("Task %d: Evaluating condition...", i+1)
-				result, err := t.When.Evaluate()
-				if err != nil {
-					log.Printf("Task %d: Error evaluating condition: %v", i+1, err)
-					continue
-				}
-
-				if result {
-					log.Printf("Task %d: Condition met! Executing action...", i+1)
-					if err := t.Then.Execute(); err != nil {
-						log.Printf("Task %d: Error executing action: %v", i+1, err)
-					} else {
-						log.Printf("Task %d: Action executed successfully", i+1)
-					}
-				} else {
-					log.Printf("Task %d: Condition not met, skipping action", i+1)
-				}
-			}
-
-			// Keep running as leader (this will be cancelled when leadership is lost)
-			<-ctx.Done()
-			log.Printf("Leadership lost or cancelled")
-			return ctx.Err()
+			cluster.Conduct(ctx, config.Tasks, epoch)
+			fmt.Println("Tasks are conducted")
+			<-ctx.Done() // Wait for leadership to be lost
+			return nil
 		},
 	})
 	if err != nil {

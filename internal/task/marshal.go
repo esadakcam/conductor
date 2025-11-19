@@ -76,6 +76,12 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			return fmt.Errorf("failed to unmarshal condition: %w", err)
 		}
 		t.When = &condition
+	case ConditionTypeAlwaysTrue:
+		var condition ConditionAlwaysTrue
+		if err := taskNode.When.Decode(&condition); err != nil {
+			return fmt.Errorf("failed to unmarshal condition: %w", err)
+		}
+		t.When = &condition
 	default:
 		return fmt.Errorf("unknown condition type: %s", bareCondition.Type)
 	}
@@ -90,6 +96,12 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	switch bareAction.Type {
 	case ActionTypeEndpoint:
 		var action ActionEndpoint
+		if err := taskNode.Then.Decode(&action); err != nil {
+			return fmt.Errorf("failed to unmarshal action: %w", err)
+		}
+		t.Then = &action
+	case ActionTypeEcho:
+		var action ActionEcho
 		if err := taskNode.Then.Decode(&action); err != nil {
 			return fmt.Errorf("failed to unmarshal action: %w", err)
 		}

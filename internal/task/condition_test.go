@@ -1,6 +1,7 @@
 package task
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -129,7 +130,7 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 				tt.condition.Endpoint = server.URL
 			}
 
-			result, err := tt.condition.Evaluate()
+			result, err := tt.condition.Evaluate(context.Background())
 
 			if tt.expectedError {
 				if err == nil {
@@ -153,7 +154,7 @@ func TestConditionEndpointSuccess_Evaluate_InvalidEndpoint(t *testing.T) {
 		Status:   200,
 	}
 
-	result, err := condition.Evaluate()
+	result, err := condition.Evaluate(context.Background())
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -459,7 +460,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 				tt.condition.Endpoint = server.URL
 			}
 
-			result, err := tt.condition.Evaluate()
+			result, err := tt.condition.Evaluate(context.Background())
 
 			if tt.expectedError {
 				if err == nil {
@@ -484,7 +485,7 @@ func TestConditionEndpointValue_Evaluate_InvalidEndpoint(t *testing.T) {
 		Operator: "eq",
 	}
 
-	result, err := condition.Evaluate()
+	result, err := condition.Evaluate(context.Background())
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
