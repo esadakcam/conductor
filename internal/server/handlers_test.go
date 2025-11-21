@@ -89,6 +89,15 @@ func TestMain(m *testing.M) {
 	provider.Delete(clusterName, "")
 	os.Remove(kubeconfigPath)
 
+	// Also cleanup k8s_client test cluster if it was created
+	if k8sClientTestClusterName != "" && k8sClientTestProvider != nil {
+		fmt.Printf("Deleting k8s_client test cluster %s...\n", k8sClientTestClusterName)
+		k8sClientTestProvider.Delete(k8sClientTestClusterName, "")
+	}
+	if k8sClientTestKubeconfigPath != "" {
+		os.Remove(k8sClientTestKubeconfigPath)
+	}
+
 	os.Exit(code)
 }
 

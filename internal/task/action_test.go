@@ -2,10 +2,13 @@ package task
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -333,6 +336,653 @@ func TestActionEndpoint_Execute_HTTPStatusCodes(t *testing.T) {
 			} else {
 				if err != nil {
 					t.Errorf("unexpected error for status code %d: %v", tc.code, err)
+				}
+			}
+		})
+	}
+}
+
+// mockOnChange is a test implementation of OnChange interface
+type mockOnChange struct {
+	mu           sync.Mutex
+	executed     bool
+	executedFor  []string
+	executeError error
+	executeCalls int
+	namespace    string
+	epoch        int64
+}
+
+func (m *mockOnChange) GetType() OnChangeType {
+	return OnChangeTypeDeploymentRestart
+}
+
+func (m *mockOnChange) Execute(ctx context.Context, member string, namespace string, epoch int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.executed = true
+	m.executedFor = append(m.executedFor, member)
+	m.executeCalls++
+	m.namespace = namespace
+	m.epoch = epoch
+	return m.executeError
+}
+
+func TestActionConfigValueSum_Execute(t *testing.T) {
+	tests := []struct {
+		name          string
+		action        *ActionConfigValueSum
+		setupServers  func() (map[string]*httptest.Server, func())
+		expectedError bool
+		validateFunc  func(*testing.T, *ActionConfigValueSum, map[string]*httptest.Server)
+	}{
+		{
+			name: "sum already matches target - no action needed",
+			action: &ActionConfigValueSum{
+				ConfigMapName: "test-config",
+				Key:           "replicas",
+				Sum:           10,
+				Members:       []string{"member1", "member2"},
+			},
+			setupServers: func() (map[string]*httptest.Server, func()) {
+				servers := make(map[string]*httptest.Server)
+				// Member1 returns 5
+				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "5",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					}
+				}))
+				// Member2 returns 5
+				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "5",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					}
+				}))
+				cleanup := func() {
+					for _, s := range servers {
+						s.Close()
+					}
+				}
+				return servers, cleanup
+			},
+			expectedError: false,
+		},
+		{
+			name: "sum is less than target - increment values",
+			action: &ActionConfigValueSum{
+				ConfigMapName: "test-config",
+				Key:           "replicas",
+				Sum:           10,
+				Members:       []string{"member1", "member2"},
+			},
+			setupServers: func() (map[string]*httptest.Server, func()) {
+				servers := make(map[string]*httptest.Server)
+				patchRequests := make(map[string][]map[string]interface{})
+				var mu sync.Mutex
+
+				// Member1 returns 3
+				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "3",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						var body map[string]interface{}
+						json.NewDecoder(r.Body).Decode(&body)
+						mu.Lock()
+						patchRequests["member1"] = append(patchRequests["member1"], body)
+						mu.Unlock()
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				// Member2 returns 3
+				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "3",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						var body map[string]interface{}
+						json.NewDecoder(r.Body).Decode(&body)
+						mu.Lock()
+						patchRequests["member2"] = append(patchRequests["member2"], body)
+						mu.Unlock()
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				cleanup := func() {
+					for _, s := range servers {
+						s.Close()
+					}
+				}
+				return servers, cleanup
+			},
+			expectedError: false,
+		},
+		{
+			name: "sum is greater than target - decrement values",
+			action: &ActionConfigValueSum{
+				ConfigMapName: "test-config",
+				Key:           "replicas",
+				Sum:           10,
+				Members:       []string{"member1", "member2"},
+			},
+			setupServers: func() (map[string]*httptest.Server, func()) {
+				servers := make(map[string]*httptest.Server)
+				// Member1 returns 7
+				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "7",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				// Member2 returns 7
+				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "7",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				cleanup := func() {
+					for _, s := range servers {
+						s.Close()
+					}
+				}
+				return servers, cleanup
+			},
+			expectedError: false,
+		},
+		{
+			name: "onChange is executed when values change",
+			action: &ActionConfigValueSum{
+				ConfigMapName: "test-config",
+				Key:           "replicas",
+				Sum:           10,
+				Members:       []string{"member1", "member2"},
+			},
+			setupServers: func() (map[string]*httptest.Server, func()) {
+				servers := make(map[string]*httptest.Server)
+				// Member1 returns 3
+				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "3",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				// Member2 returns 3
+				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "3",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				cleanup := func() {
+					for _, s := range servers {
+						s.Close()
+					}
+				}
+				return servers, cleanup
+			},
+			expectedError: false,
+			validateFunc: func(t *testing.T, action *ActionConfigValueSum, servers map[string]*httptest.Server) {
+				mockOnChange, ok := action.OnChange.(*mockOnChange)
+				if !ok {
+					t.Fatalf("expected mockOnChange, got %T", action.OnChange)
+				}
+				if !mockOnChange.executed {
+					t.Error("expected onChange to be executed")
+				}
+				if mockOnChange.executeCalls != 2 {
+					t.Errorf("expected onChange to be called 2 times, got %d", mockOnChange.executeCalls)
+				}
+				if len(mockOnChange.executedFor) != 2 {
+					t.Errorf("expected onChange to be executed for 2 members, got %d", len(mockOnChange.executedFor))
+				}
+			},
+		},
+		{
+			name: "onChange execution failure returns error",
+			action: &ActionConfigValueSum{
+				ConfigMapName: "test-config",
+				Key:           "replicas",
+				Sum:           10,
+				Members:       []string{"member1", "member2"},
+			},
+			setupServers: func() (map[string]*httptest.Server, func()) {
+				servers := make(map[string]*httptest.Server)
+				// Member1 returns 3
+				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "3",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				// Member2 returns 3
+				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "3",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				cleanup := func() {
+					for _, s := range servers {
+						s.Close()
+					}
+				}
+				return servers, cleanup
+			},
+			expectedError: true,
+		},
+		{
+			name: "fetch config value failure",
+			action: &ActionConfigValueSum{
+				ConfigMapName: "test-config",
+				Key:           "replicas",
+				Sum:           10,
+				Members:       []string{"member1", "member2"},
+			},
+			setupServers: func() (map[string]*httptest.Server, func()) {
+				servers := make(map[string]*httptest.Server)
+				// Member1 returns error
+				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" {
+						w.WriteHeader(http.StatusInternalServerError)
+					}
+				}))
+				// Member2 returns 5
+				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "5",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					}
+				}))
+				cleanup := func() {
+					for _, s := range servers {
+						s.Close()
+					}
+				}
+				return servers, cleanup
+			},
+			expectedError: false, // Errors are logged but don't stop execution
+		},
+		{
+			name: "patch config value failure",
+			action: &ActionConfigValueSum{
+				ConfigMapName: "test-config",
+				Key:           "replicas",
+				Sum:           10,
+				Members:       []string{"member1", "member2"},
+			},
+			setupServers: func() (map[string]*httptest.Server, func()) {
+				servers := make(map[string]*httptest.Server)
+				// Member1 returns 3
+				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "3",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						w.WriteHeader(http.StatusInternalServerError)
+					}
+				}))
+				// Member2 returns 3
+				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "3",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				cleanup := func() {
+					for _, s := range servers {
+						s.Close()
+					}
+				}
+				return servers, cleanup
+			},
+			expectedError: true,
+		},
+		{
+			name: "decrement prevents negative values",
+			action: &ActionConfigValueSum{
+				ConfigMapName: "test-config",
+				Key:           "replicas",
+				Sum:           5,
+				Members:       []string{"member1", "member2"},
+			},
+			setupServers: func() (map[string]*httptest.Server, func()) {
+				servers := make(map[string]*httptest.Server)
+				// Member1 returns 1 (will be decremented to 0, not negative)
+				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "1",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						var body map[string]interface{}
+						json.NewDecoder(r.Body).Decode(&body)
+						patch := body["patch"].(map[string]interface{})
+						data := patch["data"].(map[string]interface{})
+						value := data["replicas"].(string)
+						if value != "0" {
+							t.Errorf("expected value to be 0 (not negative), got %s", value)
+						}
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				// Member2 returns 10
+				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"replicas": "10",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				cleanup := func() {
+					for _, s := range servers {
+						s.Close()
+					}
+				}
+				return servers, cleanup
+			},
+			expectedError: false,
+		},
+		{
+			name: "three members with remainder distribution",
+			action: &ActionConfigValueSum{
+				ConfigMapName: "test-config",
+				Key:           "replicas",
+				Sum:           10,
+				Members:       []string{"member1", "member2", "member3"},
+			},
+			setupServers: func() (map[string]*httptest.Server, func()) {
+				servers := make(map[string]*httptest.Server)
+				// All members return 2 (sum=6, need to add 4, remainder=1)
+				for _, member := range []string{"member1", "member2", "member3"} {
+					servers[member] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+							response := map[string]interface{}{
+								"data": map[string]string{
+									"replicas": "2",
+								},
+							}
+							json.NewEncoder(w).Encode(response)
+						} else if r.Method == "PATCH" {
+							w.WriteHeader(http.StatusOK)
+						}
+					}))
+				}
+				cleanup := func() {
+					for _, s := range servers {
+						s.Close()
+					}
+				}
+				return servers, cleanup
+			},
+			expectedError: false,
+		},
+		{
+			name: "key not found in configmap",
+			action: &ActionConfigValueSum{
+				ConfigMapName: "test-config",
+				Key:           "nonexistent",
+				Sum:           10,
+				Members:       []string{"member1"},
+			},
+			setupServers: func() (map[string]*httptest.Server, func()) {
+				servers := make(map[string]*httptest.Server)
+				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
+						response := map[string]interface{}{
+							"data": map[string]string{
+								"otherkey": "5",
+							},
+						}
+						json.NewEncoder(w).Encode(response)
+					}
+				}))
+				cleanup := func() {
+					for _, s := range servers {
+						s.Close()
+					}
+				}
+				return servers, cleanup
+			},
+			expectedError: false, // Error is logged but doesn't stop execution
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			servers, cleanup := tt.setupServers()
+			defer cleanup()
+
+			// Update action members with server URLs
+			for i, member := range tt.action.Members {
+				if server, ok := servers[member]; ok {
+					tt.action.Members[i] = server.URL
+				}
+			}
+
+			// Set up mock onChange if needed
+			if strings.Contains(tt.name, "onChange") {
+				mock := &mockOnChange{}
+				if strings.Contains(tt.name, "failure") {
+					mock.executeError = fmt.Errorf("onChange execution failed")
+				}
+				tt.action.OnChange = mock
+			}
+
+			err := tt.action.Execute(context.Background(), 1)
+
+			if tt.expectedError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+
+			if tt.validateFunc != nil {
+				tt.validateFunc(t, tt.action, servers)
+			}
+		})
+	}
+}
+
+func TestActionConfigValueSum_GetType(t *testing.T) {
+	action := &ActionConfigValueSum{}
+	if action.GetType() != ActionTypeConfigValueSum {
+		t.Errorf("expected GetType() to return ActionTypeConfigValueSum, got %v", action.GetType())
+	}
+}
+
+func TestOnChangeDeploymentRestart_GetType(t *testing.T) {
+	onChange := &OnChangeDeploymentRestart{}
+	if onChange.GetType() != OnChangeTypeDeploymentRestart {
+		t.Errorf("expected GetType() to return OnChangeTypeDeploymentRestart, got %v", onChange.GetType())
+	}
+}
+
+func TestOnChangeDeploymentRestart_Execute(t *testing.T) {
+	tests := []struct {
+		name          string
+		onChange      *OnChangeDeploymentRestart
+		setupServer   func() (*httptest.Server, func())
+		expectedError bool
+		validateReq   func(*testing.T, *http.Request)
+	}{
+		{
+			name: "successful deployment restart",
+			onChange: &OnChangeDeploymentRestart{
+				Deployment: "test-deployment",
+			},
+			setupServer: func() (*httptest.Server, func()) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method != "PATCH" {
+						t.Errorf("expected PATCH method, got %s", r.Method)
+					}
+					expectedPath := "/api/v1/deployments/default/test-deployment"
+					if r.URL.Path != expectedPath {
+						t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+					}
+					var body map[string]interface{}
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Errorf("failed to decode request body: %v", err)
+					}
+					if epoch, ok := body["epoch"].(float64); !ok || epoch != 1 {
+						t.Errorf("expected epoch 1, got %v", body["epoch"])
+					}
+					patch, ok := body["patch"].(map[string]interface{})
+					if !ok {
+						t.Errorf("expected patch in body")
+					}
+					spec, ok := patch["spec"].(map[string]interface{})
+					if !ok {
+						t.Errorf("expected spec in patch")
+					}
+					template, ok := spec["template"].(map[string]interface{})
+					if !ok {
+						t.Errorf("expected template in spec")
+					}
+					metadata, ok := template["metadata"].(map[string]interface{})
+					if !ok {
+						t.Errorf("expected metadata in template")
+					}
+					annotations, ok := metadata["annotations"].(map[string]interface{})
+					if !ok {
+						t.Errorf("expected annotations in metadata")
+					}
+					if _, ok := annotations["kubectl.kubernetes.io/restartedAt"]; !ok {
+						t.Errorf("expected restartedAt annotation")
+					}
+					w.WriteHeader(http.StatusOK)
+				}))
+				return server, server.Close
+			},
+			expectedError: false,
+		},
+		{
+			name: "missing deployment name returns error",
+			onChange: &OnChangeDeploymentRestart{
+				Deployment: "",
+			},
+			setupServer: func() (*httptest.Server, func()) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				}))
+				return server, server.Close
+			},
+			expectedError: true,
+		},
+		{
+			name: "patch failure returns error",
+			onChange: &OnChangeDeploymentRestart{
+				Deployment: "test-deployment",
+			},
+			setupServer: func() (*httptest.Server, func()) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Internal Server Error"))
+				}))
+				return server, server.Close
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server, cleanup := tt.setupServer()
+			defer cleanup()
+
+			// Create a context with member URL
+			ctx := context.Background()
+			member := server.URL
+
+			err := tt.onChange.Execute(ctx, member, "default", 1)
+
+			if tt.expectedError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
 				}
 			}
 		})
