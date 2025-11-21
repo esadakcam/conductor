@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/esadakcam/conductor/internal/logger"
 )
 
 // Config holds server configuration
@@ -43,6 +45,7 @@ func NewServer(cfg Config, handler *Handler) *Server {
 // Start starts the HTTP server
 func (s *Server) Start() error {
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Errorf("Server listen failed: %v", err)
 		return fmt.Errorf("server listen failed: %w", err)
 	}
 	return nil
@@ -50,7 +53,11 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully stops the server
 func (s *Server) Shutdown(ctx context.Context) error {
-	return s.server.Shutdown(ctx)
+	if err := s.server.Shutdown(ctx); err != nil {
+		logger.Errorf("Server shutdown failed: %v", err)
+		return err
+	}
+	return nil
 }
 
 // Run starts the server in a goroutine and waits for context cancellation to shut it down

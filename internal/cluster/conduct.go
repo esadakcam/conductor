@@ -2,10 +2,10 @@ package cluster
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
+	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/task"
 )
 
@@ -24,7 +24,7 @@ func Conduct(ctx context.Context, tasks []task.Task, epoch int64) {
 }
 
 func watch(ctx context.Context, task task.Task, epoch int64) {
-	fmt.Printf("Watching task %s\n", task.When.GetType())
+	logger.Infof("Watching task %s", task.When.GetType())
 	for {
 		select {
 		case <-ctx.Done():
@@ -32,17 +32,17 @@ func watch(ctx context.Context, task task.Task, epoch int64) {
 		case <-time.After(WATCH_INTERVAL):
 			result, err := task.When.Evaluate(ctx)
 			if err != nil {
-				fmt.Printf("Error evaluating condition: %v\n", err)
+				logger.Errorf("Error evaluating condition: %v", err)
 				continue
 			}
 			if result {
-				fmt.Printf("Condition met, executing action for task %s\n", task.When.GetType())
+				logger.Infof("Condition met, executing action for task %s", task.When.GetType())
 				err := task.Then.Execute(ctx, epoch)
 				if err != nil {
-					fmt.Printf("Error executing action for task %s: %v\n", task.When.GetType(), err)
+					logger.Errorf("Error executing action for task %s: %v", task.When.GetType(), err)
 					continue
 				}
-				fmt.Printf("Action executed successfully for task %s\n", task.When.GetType())
+				logger.Infof("Action executed successfully for task %s", task.When.GetType())
 				continue
 			}
 		}

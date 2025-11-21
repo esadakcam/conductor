@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/esadakcam/conductor/internal/logger"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/kind/pkg/cluster"
 )
@@ -43,13 +44,13 @@ func TestMain(m *testing.M) {
 
 	// Check if cluster already exists (cleanup from previous failed run?)
 	// We'll just create a new one.
-	fmt.Printf("Creating kind cluster %s...\n", clusterName)
+	logger.Infof("Creating kind cluster %s...", clusterName)
 	err := provider.Create(
 		clusterName,
 		cluster.CreateWithWaitForReady(time.Minute*5),
 	)
 	if err != nil {
-		fmt.Printf("Failed to create kind cluster: %v\n", err)
+		logger.Errorf("Failed to create kind cluster: %v", err)
 		// Fallback to run without cluster if creation fails?
 		// Or better, exit with error as these are integration tests.
 		// But let's try to run tests anyway, maybe they mock things?
@@ -60,7 +61,7 @@ func TestMain(m *testing.M) {
 	// Export kubeconfig
 	kubeconfig, err := provider.KubeConfig(clusterName, false)
 	if err != nil {
-		fmt.Printf("Failed to get kubeconfig: %v\n", err)
+		logger.Errorf("Failed to get kubeconfig: %v", err)
 		provider.Delete(clusterName, "")
 		os.Exit(1)
 	}
@@ -68,14 +69,14 @@ func TestMain(m *testing.M) {
 	// Write kubeconfig to a temp file
 	tmpFile, err := os.CreateTemp("", "kind-kubeconfig-*")
 	if err != nil {
-		fmt.Printf("Failed to create temp kubeconfig file: %v\n", err)
+		logger.Errorf("Failed to create temp kubeconfig file: %v", err)
 		provider.Delete(clusterName, "")
 		os.Exit(1)
 	}
 	defer tmpFile.Close()
 
 	if _, err := tmpFile.WriteString(kubeconfig); err != nil {
-		fmt.Printf("Failed to write kubeconfig: %v\n", err)
+		logger.Errorf("Failed to write kubeconfig: %v", err)
 		provider.Delete(clusterName, "")
 		os.Exit(1)
 	}
@@ -85,13 +86,13 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	// Cleanup
-	fmt.Printf("Deleting kind cluster %s...\n", clusterName)
+	logger.Infof("Deleting kind cluster %s...", clusterName)
 	provider.Delete(clusterName, "")
 	os.Remove(kubeconfigPath)
 
 	// Also cleanup k8s_client test cluster if it was created
 	if k8sClientTestClusterName != "" && k8sClientTestProvider != nil {
-		fmt.Printf("Deleting k8s_client test cluster %s...\n", k8sClientTestClusterName)
+		logger.Infof("Deleting k8s_client test cluster %s...", k8sClientTestClusterName)
 		k8sClientTestProvider.Delete(k8sClientTestClusterName, "")
 	}
 	if k8sClientTestKubeconfigPath != "" {

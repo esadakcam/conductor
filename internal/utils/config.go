@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/server"
 	"github.com/esadakcam/conductor/internal/task"
 	"gopkg.in/yaml.v3"
@@ -20,11 +21,13 @@ type Config struct {
 func LoadConfig(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
+		logger.Errorf("LoadConfig: failed to read config file %s: %v", configPath, err)
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
+		logger.Errorf("LoadConfig: failed to parse config file %s: %v", configPath, err)
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
@@ -34,7 +37,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 
 	if config.Name == "" {
-		return nil, fmt.Errorf("name is required in config file")
+		err := fmt.Errorf("name is required in config file")
+		logger.Error("LoadConfig: name is required in config file")
+		return nil, err
 	}
 
 	// Set default port if not specified

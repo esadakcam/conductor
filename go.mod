@@ -3,6 +3,7 @@ module github.com/esadakcam/conductor
 go 1.25.2
 
 require (
+	github.com/sirupsen/logrus v1.9.3
 	go.etcd.io/etcd/client/v3 v3.6.6
 	go.etcd.io/etcd/server/v3 v3.6.6
 	gopkg.in/yaml.v3 v3.0.1
@@ -49,7 +50,6 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/soheilhy/cmux v0.1.5 // indirect
 	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect

@@ -12,11 +12,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/esadakcam/conductor/internal/logger"
 )
 
 func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context) (bool, error) {
 	if c.Endpoint == "" {
-		return false, fmt.Errorf("endpoint is required")
+		err := fmt.Errorf("endpoint is required")
+		logger.Error("ConditionEndpointSuccess: endpoint is required")
+		return false, err
 	}
 
 	client := &http.Client{
@@ -25,11 +29,13 @@ func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context) (bool, error) {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", c.Endpoint, nil)
 	if err != nil {
+		logger.Errorf("ConditionEndpointSuccess: failed to create request to %s: %v", c.Endpoint, err)
 		return false, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.Errorf("ConditionEndpointSuccess: failed to make request to %s: %v", c.Endpoint, err)
 		return false, fmt.Errorf("failed to make request to %s: %w", c.Endpoint, err)
 	}
 	defer resp.Body.Close()
@@ -43,6 +49,7 @@ func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context) (bool, error) {
 	if c.ResponseBody != "" {
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
+			logger.Errorf("ConditionEndpointSuccess: failed to read response body from %s: %v", c.Endpoint, err)
 			return false, fmt.Errorf("failed to read response body: %w", err)
 		}
 		bodyStr := strings.TrimSpace(string(bodyBytes))
@@ -57,7 +64,9 @@ func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context) (bool, error) {
 
 func (c *ConditionEndpointValue) Evaluate(ctx context.Context) (bool, error) {
 	if c.Endpoint == "" {
-		return false, fmt.Errorf("endpoint is required")
+		err := fmt.Errorf("endpoint is required")
+		logger.Error("ConditionEndpointValue: endpoint is required")
+		return false, err
 	}
 
 	client := &http.Client{
@@ -66,11 +75,13 @@ func (c *ConditionEndpointValue) Evaluate(ctx context.Context) (bool, error) {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", c.Endpoint, nil)
 	if err != nil {
+		logger.Errorf("ConditionEndpointValue: failed to create request to %s: %v", c.Endpoint, err)
 		return false, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.Errorf("ConditionEndpointValue: failed to make request to %s: %v", c.Endpoint, err)
 		return false, fmt.Errorf("failed to make request to %s: %w", c.Endpoint, err)
 	}
 	defer resp.Body.Close()
@@ -78,6 +89,7 @@ func (c *ConditionEndpointValue) Evaluate(ctx context.Context) (bool, error) {
 	// Read response body
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logger.Errorf("ConditionEndpointValue: failed to read response body from %s: %v", c.Endpoint, err)
 		return false, fmt.Errorf("failed to read response body: %w", err)
 	}
 
@@ -85,6 +97,7 @@ func (c *ConditionEndpointValue) Evaluate(ctx context.Context) (bool, error) {
 	bodyStr := strings.TrimSpace(string(bodyBytes))
 	responseValue, err := strconv.Atoi(bodyStr)
 	if err != nil {
+		logger.Errorf("ConditionEndpointValue: failed to parse response body as integer from %s: %v", c.Endpoint, err)
 		return false, fmt.Errorf("failed to parse response body as integer: %w", err)
 	}
 
@@ -103,7 +116,9 @@ func (c *ConditionEndpointValue) Evaluate(ctx context.Context) (bool, error) {
 	case "ge":
 		return responseValue >= c.Value, nil
 	default:
-		return false, fmt.Errorf("unsupported operator: %s", c.Operator)
+		err := fmt.Errorf("unsupported operator: %s", c.Operator)
+		logger.Errorf("ConditionEndpointValue: %v", err)
+		return false, err
 	}
 }
 
@@ -125,7 +140,9 @@ func (c *ConditionAlwaysTrue) GetType() ConditionType {
 
 func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64) error {
 	if a.Endpoint == "" {
-		return fmt.Errorf("endpoint is required")
+		err := fmt.Errorf("endpoint is required")
+		logger.Error("ActionEndpoint: endpoint is required")
+		return err
 	}
 
 	// Default to GET if method is not specified
@@ -143,6 +160,7 @@ func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64) error {
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, method, a.Endpoint, reqBody)
 	if err != nil {
+		logger.Errorf("ActionEndpoint: failed to create request to %s: %v", a.Endpoint, err)
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -163,20 +181,23 @@ func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64) error {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.Errorf("ActionEndpoint: failed to execute request to %s: %v", a.Endpoint, err)
 		return fmt.Errorf("failed to execute request to %s: %w", a.Endpoint, err)
 	}
 	defer resp.Body.Close()
 
 	// Check for HTTP error status codes (4xx, 5xx)
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("request failed with status code %d", resp.StatusCode)
+		err := fmt.Errorf("request failed with status code %d", resp.StatusCode)
+		logger.Errorf("ActionEndpoint: request to %s failed with status code %d", a.Endpoint, resp.StatusCode)
+		return err
 	}
 
 	return nil
 }
 
 func (a *ActionEcho) Execute(ctx context.Context, epoch int64) error {
-	fmt.Println(a.Message)
+	logger.Info(a.Message)
 	return nil
 }
 
@@ -190,14 +211,14 @@ func (a *ActionEcho) GetType() ActionType {
 
 func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64) error {
 	curSumMap := a.fetchCurrentValues(ctx)
-	
+
 	curSum := 0
 	for _, value := range curSumMap {
 		curSum += value
 	}
 
 	if curSum == a.Sum {
-		fmt.Printf("config value sum is equal to the sum, no action needed\n")
+		logger.Info("config value sum is equal to the sum, no action needed")
 		return nil
 	}
 
@@ -216,7 +237,7 @@ func (a *ActionConfigValueSum) fetchCurrentValues(ctx context.Context) map[strin
 			defer wg.Done()
 			value, err := fetchConfigValue(ctx, member, a.ConfigMapName, a.Key)
 			if err != nil {
-				fmt.Printf("error fetching config value from %s: %v\n", member, err)
+				logger.Errorf("error fetching config value from %s: %v", member, err)
 				return
 			}
 			mutex.Lock()
@@ -234,9 +255,9 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, di
 	if diff < 0 {
 		absDiff = -diff
 		actionVerb = "decrementing"
-		fmt.Printf("config value sum is greater than the sum, need to decrement by %d\n", absDiff)
+		logger.Infof("config value sum is greater than the sum, need to decrement by %d", absDiff)
 	} else {
-		fmt.Printf("config value sum is less than the sum, need to increment by %d\n", diff)
+		logger.Infof("config value sum is less than the sum, need to increment by %d", diff)
 	}
 
 	// Distribute diff across members
@@ -277,9 +298,10 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, di
 			continue
 		}
 
-		fmt.Printf("%s %s/%s by %d on %s (from %d to %d)\n", actionVerb, a.ConfigMapName, a.Key, change, member, currentValue, newValue)
+		logger.Infof("%s %s/%s by %d on %s (from %d to %d)", actionVerb, a.ConfigMapName, a.Key, change, member, currentValue, newValue)
 
 		if err := patchConfigValue(ctx, member, a.ConfigMapName, a.Key, newValue, epoch); err != nil {
+			logger.Errorf("ActionConfigValueSum: failed to patch config value %s/%s on %s: %v", a.ConfigMapName, a.Key, member, err)
 			return fmt.Errorf("failed to patch config value on %s: %w", member, err)
 		}
 
@@ -287,11 +309,12 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, di
 		if diff < 0 {
 			actionPast = "decremented"
 		}
-		fmt.Printf("successfully %s %s/%s to %d on %s\n", actionPast, a.ConfigMapName, a.Key, newValue, member)
+		logger.Infof("successfully %s %s/%s to %d on %s", actionPast, a.ConfigMapName, a.Key, newValue, member)
 
 		// Execute onChange action if configured
 		if a.OnChange != nil {
 			if err := a.OnChange.Execute(ctx, member, "default", epoch); err != nil {
+				logger.Errorf("ActionConfigValueSum: failed to execute onChange action on %s: %v", member, err)
 				return fmt.Errorf("failed to execute onChange action on %s: %w", member, err)
 			}
 		}
@@ -309,7 +332,9 @@ func (o *OnChangeDeploymentRestart) GetType() OnChangeType {
 
 func (o *OnChangeDeploymentRestart) Execute(ctx context.Context, member string, namespace string, epoch int64) error {
 	if o.Deployment == "" {
-		return fmt.Errorf("deployment name is required")
+		err := fmt.Errorf("deployment name is required")
+		logger.Error("OnChangeDeploymentRestart: deployment name is required")
+		return err
 	}
 	patchData := map[string]interface{}{
 		"spec": map[string]interface{}{
@@ -324,10 +349,11 @@ func (o *OnChangeDeploymentRestart) Execute(ctx context.Context, member string, 
 	}
 
 	if err := patchResource(ctx, member, "deployments", namespace, o.Deployment, patchData, epoch); err != nil {
+		logger.Errorf("OnChangeDeploymentRestart: failed to restart deployment %s/%s via %s: %v", namespace, o.Deployment, member, err)
 		return fmt.Errorf("failed to restart deployment: %w", err)
 	}
 
-	fmt.Printf("successfully restarted deployment %s/%s via %s\n", namespace, o.Deployment, member)
+	logger.Infof("successfully restarted deployment %s/%s via %s", namespace, o.Deployment, member)
 	return nil
 }
 

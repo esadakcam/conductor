@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/esadakcam/conductor/internal/logger"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/kind/pkg/cluster"
@@ -38,12 +39,12 @@ func setupK8sClientTestCluster(t *testing.T) {
 		existingClusters, _ := k8sClientTestProvider.List()
 		for _, name := range existingClusters {
 			if name == k8sClientTestClusterName {
-				fmt.Printf("Cleaning up existing cluster %s...\n", k8sClientTestClusterName)
+				logger.Infof("Cleaning up existing cluster %s...", k8sClientTestClusterName)
 				k8sClientTestProvider.Delete(k8sClientTestClusterName, "")
 			}
 		}
 
-		fmt.Printf("Creating kind cluster %s for k8s_client tests...\n", k8sClientTestClusterName)
+		logger.Infof("Creating kind cluster %s for k8s_client tests...", k8sClientTestClusterName)
 		err := k8sClientTestProvider.Create(
 			k8sClientTestClusterName,
 			cluster.CreateWithWaitForReady(time.Minute*5),

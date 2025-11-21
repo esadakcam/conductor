@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/esadakcam/conductor/internal/logger"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
@@ -52,7 +53,9 @@ type Config struct {
 // Returns the LeaderElector and the etcd client (which should be closed by the caller).
 func NewLeaderElector(cfg Config) (*LeaderElector, *clientv3.Client, error) {
 	if len(cfg.EtcdEndpoints) == 0 {
-		return nil, nil, errors.New("etcd endpoints are required")
+		err := errors.New("etcd endpoints are required")
+		logger.Error("NewLeaderElector: etcd endpoints are required")
+		return nil, nil, err
 	}
 
 	client, err := clientv3.New(clientv3.Config{
@@ -60,17 +63,22 @@ func NewLeaderElector(cfg Config) (*LeaderElector, *clientv3.Client, error) {
 		DialTimeout: 5 * time.Second,
 	})
 	if err != nil {
+		logger.Errorf("NewLeaderElector: failed to create etcd client: %v", err)
 		return nil, nil, fmt.Errorf("failed to create etcd client: %w", err)
 	}
 
 	if cfg.Name == "" {
 		client.Close()
-		return nil, nil, errors.New("name is required")
+		err := errors.New("name is required")
+		logger.Error("NewLeaderElector: name is required")
+		return nil, nil, err
 	}
 
 	if cfg.LeaderFn == nil {
 		client.Close()
-		return nil, nil, errors.New("leader function is required")
+		err := errors.New("leader function is required")
+		logger.Error("NewLeaderElector: leader function is required")
+		return nil, nil, err
 	}
 
 	prefix := cfg.Prefix
@@ -115,6 +123,7 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 			if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				return ctx.Err()
 			}
+			logger.Errorf("LeaderElector: failed to create session: %v", err)
 			time.Sleep(e.backoff)
 			continue
 		}
@@ -125,6 +134,7 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 			if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				return ctx.Err()
 			}
+			logger.Errorf("LeaderElector: failed to campaign for leadership: %v", err)
 			time.Sleep(e.backoff)
 			continue
 		}
@@ -136,11 +146,12 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 			if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				return ctx.Err()
 			}
+			logger.Errorf("LeaderElector: failed to get next epoch: %v", err)
 			time.Sleep(e.backoff)
 			continue
 		}
 
-		fmt.Printf("Leadership acquired for epoch: %d\n", epoch)
+		logger.Infof("Leadership acquired for epoch: %d", epoch)
 		leaderCtx, cancel := context.WithCancel(ctx)
 		done := make(chan struct{})
 		go func() {
@@ -152,6 +163,7 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 		select {
 		case <-session.Done():
 			reason = errors.New("leadership lost")
+			logger.Warn("LeaderElector: leadership lost")
 		case <-ctx.Done():
 			reason = ctx.Err()
 		}
@@ -161,7 +173,9 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 		<-done
 
 		resignCtx, resignCancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_ = election.Resign(resignCtx)
+		if err := election.Resign(resignCtx); err != nil {
+			logger.Errorf("LeaderElector: failed to resign leadership: %v", err)
+		}
 		resignCancel()
 		session.Close()
 
@@ -177,6 +191,7 @@ func (e *LeaderElector) nextEpoch(ctx context.Context) (int64, error) {
 	for {
 		currEpochResp, err := e.client.Get(ctx, e.epochKey)
 		if err != nil {
+			logger.Errorf("LeaderElector: failed to get current epoch from etcd: %v", err)
 			return 0, err
 		}
 
@@ -192,6 +207,7 @@ func (e *LeaderElector) nextEpoch(ctx context.Context) (int64, error) {
 			currentKV := currEpochResp.Kvs[0]
 			current, err := strconv.ParseInt(string(currentKV.Value), 10, 64)
 			if err != nil {
+				logger.Errorf("LeaderElector: failed to parse epoch value %q: %v", string(currentKV.Value), err)
 				return 0, fmt.Errorf("invalid epoch value %q: %w", string(currentKV.Value), err)
 			}
 			expectedRevision = currentKV.ModRevision
@@ -204,6 +220,7 @@ func (e *LeaderElector) nextEpoch(ctx context.Context) (int64, error) {
 			Then(clientv3.OpPut(e.epochKey, fmt.Sprintf("%d", next))).
 			Commit()
 		if err != nil {
+			logger.Errorf("LeaderElector: failed to commit epoch transaction: %v", err)
 			return 0, err
 		}
 
