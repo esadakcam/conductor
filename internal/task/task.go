@@ -3,11 +3,14 @@ package task
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -183,4 +186,232 @@ func (a *ActionEndpoint) GetType() ActionType {
 
 func (a *ActionEcho) GetType() ActionType {
 	return ActionTypeEcho
+}
+
+func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64) error {
+
+	var mutex sync.Mutex
+	var curSumMap = make(map[string]int)
+	var wg sync.WaitGroup
+
+	for _, member := range a.Members {
+		wg.Go(func() {
+			value, err := fetchConfigValue(ctx, member, a.ConfigMapName, a.Key)
+			if err != nil {
+				fmt.Printf("error fetching config value from %s: %v\n", member, err)
+				return
+			}
+			mutex.Lock()
+			curSumMap[member] = value
+			mutex.Unlock()
+		})
+	}
+	wg.Wait()
+
+	curSum := 0
+	for _, value := range curSumMap {
+		curSum += value
+	}
+
+	if curSum == a.Sum {
+		fmt.Printf("config value sum is equal to the sum, no action needed\n")
+		return nil
+	}
+
+	diff := a.Sum - curSum
+
+	if diff != 0 {
+		absDiff := diff
+		actionVerb := "incrementing"
+		if diff < 0 {
+			absDiff = -diff
+			actionVerb = "decrementing"
+			fmt.Printf("config value sum is greater than the sum, need to decrement by %d\n", absDiff)
+		} else {
+			fmt.Printf("config value sum is less than the sum, need to increment by %d\n", diff)
+		}
+
+		// Distribute diff across members
+		baseChange := absDiff / len(a.Members)
+		remainder := absDiff % len(a.Members)
+
+		// Pick one random member to get the remainder
+		remainderMember := ""
+		if remainder > 0 {
+			remainderMember = a.Members[rand.Intn(len(a.Members))]
+		}
+
+		// Apply changes to all members
+		for _, member := range a.Members {
+			change := baseChange
+			if member == remainderMember {
+				change += remainder
+			}
+
+			if change == 0 {
+				continue
+			}
+
+			currentValue := curSumMap[member]
+			var newValue int
+			if diff > 0 {
+				newValue = currentValue + change
+			} else {
+				newValue = currentValue - change
+				if newValue < 0 {
+					// Can't decrement below 0, so only decrement what we can
+					change = currentValue
+					newValue = 0
+				}
+			}
+
+			if change == 0 {
+				continue
+			}
+
+			fmt.Printf("%s %s/%s by %d on %s (from %d to %d)\n", actionVerb, a.ConfigMapName, a.Key, change, member, currentValue, newValue)
+
+			if err := patchConfigValue(ctx, member, a.ConfigMapName, a.Key, newValue, epoch); err != nil {
+				return fmt.Errorf("failed to patch config value on %s: %w", member, err)
+			}
+
+			actionPast := "incremented"
+			if diff < 0 {
+				actionPast = "decremented"
+			}
+			fmt.Printf("successfully %s %s/%s to %d on %s\n", actionPast, a.ConfigMapName, a.Key, newValue, member)
+
+			// Execute onChange action if configured
+			if a.OnChange != nil {
+				if err := a.OnChange.Execute(ctx, member, "default", epoch); err != nil {
+					return fmt.Errorf("failed to execute onChange action on %s: %w", member, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (a *ActionConfigValueSum) GetType() ActionType {
+	return ActionTypeConfigValueSum
+}
+
+func (o *OnChangeDeploymentRestart) GetType() OnChangeType {
+	return OnChangeTypeDeploymentRestart
+}
+
+func (o *OnChangeDeploymentRestart) Execute(ctx context.Context, member string, namespace string, epoch int64) error {
+	if o.Deployment == "" {
+		return fmt.Errorf("deployment name is required")
+	}
+	patchData := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"template": map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"annotations": map[string]string{
+						"kubectl.kubernetes.io/restartedAt": time.Now().Format(time.RFC3339),
+					},
+				},
+			},
+		},
+	}
+
+	if err := patchResource(ctx, member, "deployments", namespace, o.Deployment, patchData, epoch); err != nil {
+		return fmt.Errorf("failed to restart deployment: %w", err)
+	}
+
+	fmt.Printf("successfully restarted deployment %s/%s via %s\n", namespace, o.Deployment, member)
+	return nil
+}
+
+func fetchConfigValue(ctx context.Context, member string, configMapName string, key string) (int, error) {
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/api/v1/configmaps/default/%s", member, configMapName), nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request to %s: %w", member, err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to make request to %s: %w", member, err)
+	}
+	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read response body from %s: %w", member, err)
+	}
+
+	var configMap struct {
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(bodyBytes, &configMap); err != nil {
+		return 0, fmt.Errorf("failed to parse ConfigMap JSON from %s: %w", member, err)
+	}
+
+	if key == "" {
+		return 0, fmt.Errorf("key is required but not specified for ConfigMap %s from %s", configMapName, member)
+	}
+
+	valueStr, exists := configMap.Data[key]
+	if !exists {
+		return 0, fmt.Errorf("key '%s' not found in ConfigMap data from %s", key, member)
+	}
+
+	value, err := strconv.Atoi(strings.TrimSpace(valueStr))
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse value '%s' as integer from %s: %w", valueStr, member, err)
+	}
+
+	return value, nil
+}
+
+func patchResource(ctx context.Context, member string, resource string, namespace string, name string, patchData map[string]interface{}, epoch int64) error {
+	// Create patch payload
+	patchPayload := map[string]interface{}{
+		"epoch": epoch,
+		"patch": patchData,
+	}
+
+	patchBody, err := json.Marshal(patchPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patch payload: %w", err)
+	}
+
+	// Make PATCH request
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	patchURL := fmt.Sprintf("%s/api/v1/%s/%s/%s", member, resource, namespace, name)
+	req, err := http.NewRequestWithContext(ctx, "PATCH", patchURL, bytes.NewBuffer(patchBody))
+	if err != nil {
+		return fmt.Errorf("failed to create PATCH request to %s: %w", member, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute PATCH request to %s: %w", member, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("PATCH request failed with status code %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+func patchConfigValue(ctx context.Context, member string, configMapName string, key string, newValue int, epoch int64) error {
+	patchData := map[string]interface{}{
+		"data": map[string]string{
+			key: strconv.Itoa(newValue),
+		},
+	}
+
+	return patchResource(ctx, member, "configmaps", "default", configMapName, patchData, epoch)
 }

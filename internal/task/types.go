@@ -13,8 +13,15 @@ const (
 type ActionType string
 
 const (
-	ActionTypeEndpoint ActionType = "endpoint"
-	ActionTypeEcho     ActionType = "echo"
+	ActionTypeEndpoint       ActionType = "endpoint"
+	ActionTypeEcho           ActionType = "echo"
+	ActionTypeConfigValueSum ActionType = "config_value_sum"
+)
+
+type OnChangeType string
+
+const (
+	OnChangeTypeDeploymentRestart OnChangeType = "deployment_restart"
 )
 
 type Config struct {
@@ -34,6 +41,11 @@ type Condition interface {
 type Action interface {
 	Execute(ctx context.Context, epoch int64) error
 	GetType() ActionType
+}
+
+type OnChange interface {
+	GetType() OnChangeType
+	Execute(ctx context.Context, member string, namespace string, epoch int64) error
 }
 
 type ConditionEndpointSuccess struct {
@@ -65,6 +77,20 @@ type ActionEndpoint struct {
 type ActionEcho struct {
 	Type    ActionType `yaml:"type"`
 	Message string     `yaml:"message"`
+}
+
+type ActionConfigValueSum struct {
+	Type          ActionType `yaml:"type"`
+	ConfigMapName string     `yaml:"configMap"`
+	Key           string     `yaml:"key"`
+	Sum           int        `yaml:"sum"`
+	Members       []string   `yaml:"members"` // todo make it a struct and pass auth info
+	OnChange      OnChange   `yaml:"onChange"`
+}
+
+type OnChangeDeploymentRestart struct {
+	Type       OnChangeType `yaml:"type"`
+	Deployment string       `yaml:"deployment"`
 }
 
 // TODO: Add k8s related actions

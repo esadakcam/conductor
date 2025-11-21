@@ -140,6 +140,7 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 			continue
 		}
 
+		fmt.Printf("Leadership acquired for epoch: %d\n", epoch)
 		leaderCtx, cancel := context.WithCancel(ctx)
 		done := make(chan struct{})
 		go func() {

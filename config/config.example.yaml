@@ -32,8 +32,21 @@ tasks:
   #     headers:
   #       Content-Type: "application/json"
   #     body: '{"alert": "Threshold exceeded"}'
+  # - when:
+  #     type: "always_true"
+  #   then:
+  #     type: "echo"
+  #     message: "conductor!"
   - when:
       type: "always_true"
     then:
-      type: "echo"
-      message: "conductor!"
+      type: "config_value_sum"
+      config_map: "nginx-data"
+      key: "value"
+      sum: 20
+      members:
+        - "http://localhost:8080"
+      onChange:
+        - type: "deployment_restart" 
+          deployment: "nginx"
+
