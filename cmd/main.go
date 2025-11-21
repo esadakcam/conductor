@@ -10,7 +10,6 @@ import (
 
 	"github.com/esadakcam/conductor/internal/cluster"
 	"github.com/esadakcam/conductor/internal/server"
-	"github.com/esadakcam/conductor/internal/task"
 	"github.com/esadakcam/conductor/internal/utils"
 )
 
@@ -32,33 +31,15 @@ func main() {
 		configPath = os.Args[1]
 	}
 
-	config, err := task.LoadConfig(configPath)
+	config, err := utils.LoadConfig(configPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Read etcd endpoints from config file
-	etcdEndpoints, err := utils.GetEtcdEndpoints(configPath)
-	if err != nil {
-		log.Fatalf("Failed to get etcd endpoints: %v", err)
-	}
-
-	// Read name from config file
-	name, err := utils.GetName(configPath)
-	if err != nil {
-		log.Fatalf("Failed to get name: %v", err)
-	}
-
-	// Read server config
-	serverConfig, err := utils.GetServerConfig(configPath)
-	if err != nil {
-		log.Fatalf("Failed to get server config: %v", err)
-	}
-
 	// Initialize leader election
 	elector, etcdClient, err := cluster.NewLeaderElector(cluster.Config{
-		EtcdEndpoints: etcdEndpoints,
-		Name:          name,
+		EtcdEndpoints: config.EtcdEndpoints,
+		Name:          config.Name,
 		LeaderFn: func(ctx context.Context, epoch int64) error {
 			cluster.Conduct(ctx, config.Tasks, epoch)
 			fmt.Println("Tasks are conducted")
@@ -82,18 +63,18 @@ func main() {
 
 	// Initialize HTTP Server
 	srvHandler := server.NewHandler(k8sClient, epochValidator)
-	srv := server.NewServer(server.Config{Port: serverConfig.Port}, srvHandler)
+	srv := server.NewServer(server.Config{Port: config.Server.Port}, srvHandler)
 
 	// Start server in background
 	go func() {
-		log.Printf("Starting HTTP server on port %d", serverConfig.Port)
+		log.Printf("Starting HTTP server on port %d", config.Server.Port)
 		if err := srv.Run(ctx); err != nil {
 			log.Printf("HTTP server error: %v", err)
 			cancel()
 		}
 	}()
 
-	log.Printf("Participating in leader election (ID: %s)...", name)
+	log.Printf("Participating in leader election (ID: %s)...", config.Name)
 	if err := elector.Run(ctx); err != nil {
 		if err != context.Canceled {
 			log.Fatalf("Leader election error: %v", err)

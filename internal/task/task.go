@@ -189,25 +189,8 @@ func (a *ActionEcho) GetType() ActionType {
 }
 
 func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64) error {
-
-	var mutex sync.Mutex
-	var curSumMap = make(map[string]int)
-	var wg sync.WaitGroup
-
-	for _, member := range a.Members {
-		wg.Go(func() {
-			value, err := fetchConfigValue(ctx, member, a.ConfigMapName, a.Key)
-			if err != nil {
-				fmt.Printf("error fetching config value from %s: %v\n", member, err)
-				return
-			}
-			mutex.Lock()
-			curSumMap[member] = value
-			mutex.Unlock()
-		})
-	}
-	wg.Wait()
-
+	curSumMap := a.fetchCurrentValues(ctx)
+	
 	curSum := 0
 	for _, value := range curSumMap {
 		curSum += value
@@ -219,77 +202,100 @@ func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64) error {
 	}
 
 	diff := a.Sum - curSum
+	return a.distributeAndApplyChanges(ctx, diff, curSumMap, epoch)
+}
 
-	if diff != 0 {
-		absDiff := diff
-		actionVerb := "incrementing"
-		if diff < 0 {
-			absDiff = -diff
-			actionVerb = "decrementing"
-			fmt.Printf("config value sum is greater than the sum, need to decrement by %d\n", absDiff)
+func (a *ActionConfigValueSum) fetchCurrentValues(ctx context.Context) map[string]int {
+	var mutex sync.Mutex
+	var curSumMap = make(map[string]int)
+	var wg sync.WaitGroup
+
+	for _, member := range a.Members {
+		wg.Add(1)
+		go func(member string) {
+			defer wg.Done()
+			value, err := fetchConfigValue(ctx, member, a.ConfigMapName, a.Key)
+			if err != nil {
+				fmt.Printf("error fetching config value from %s: %v\n", member, err)
+				return
+			}
+			mutex.Lock()
+			curSumMap[member] = value
+			mutex.Unlock()
+		}(member)
+	}
+	wg.Wait()
+	return curSumMap
+}
+
+func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, diff int, curSumMap map[string]int, epoch int64) error {
+	absDiff := diff
+	actionVerb := "incrementing"
+	if diff < 0 {
+		absDiff = -diff
+		actionVerb = "decrementing"
+		fmt.Printf("config value sum is greater than the sum, need to decrement by %d\n", absDiff)
+	} else {
+		fmt.Printf("config value sum is less than the sum, need to increment by %d\n", diff)
+	}
+
+	// Distribute diff across members
+	baseChange := absDiff / len(a.Members)
+	remainder := absDiff % len(a.Members)
+
+	// Pick one random member to get the remainder
+	remainderMember := ""
+	if remainder > 0 {
+		remainderMember = a.Members[rand.Intn(len(a.Members))]
+	}
+
+	// Apply changes to all members
+	for _, member := range a.Members {
+		change := baseChange
+		if member == remainderMember {
+			change += remainder
+		}
+
+		if change == 0 {
+			continue
+		}
+
+		currentValue := curSumMap[member]
+		var newValue int
+		if diff > 0 {
+			newValue = currentValue + change
 		} else {
-			fmt.Printf("config value sum is less than the sum, need to increment by %d\n", diff)
+			newValue = currentValue - change
+			if newValue < 0 {
+				// Can't decrement below 0, so only decrement what we can
+				change = currentValue
+				newValue = 0
+			}
 		}
 
-		// Distribute diff across members
-		baseChange := absDiff / len(a.Members)
-		remainder := absDiff % len(a.Members)
-
-		// Pick one random member to get the remainder
-		remainderMember := ""
-		if remainder > 0 {
-			remainderMember = a.Members[rand.Intn(len(a.Members))]
+		if change == 0 {
+			continue
 		}
 
-		// Apply changes to all members
-		for _, member := range a.Members {
-			change := baseChange
-			if member == remainderMember {
-				change += remainder
-			}
+		fmt.Printf("%s %s/%s by %d on %s (from %d to %d)\n", actionVerb, a.ConfigMapName, a.Key, change, member, currentValue, newValue)
 
-			if change == 0 {
-				continue
-			}
+		if err := patchConfigValue(ctx, member, a.ConfigMapName, a.Key, newValue, epoch); err != nil {
+			return fmt.Errorf("failed to patch config value on %s: %w", member, err)
+		}
 
-			currentValue := curSumMap[member]
-			var newValue int
-			if diff > 0 {
-				newValue = currentValue + change
-			} else {
-				newValue = currentValue - change
-				if newValue < 0 {
-					// Can't decrement below 0, so only decrement what we can
-					change = currentValue
-					newValue = 0
-				}
-			}
+		actionPast := "incremented"
+		if diff < 0 {
+			actionPast = "decremented"
+		}
+		fmt.Printf("successfully %s %s/%s to %d on %s\n", actionPast, a.ConfigMapName, a.Key, newValue, member)
 
-			if change == 0 {
-				continue
-			}
-
-			fmt.Printf("%s %s/%s by %d on %s (from %d to %d)\n", actionVerb, a.ConfigMapName, a.Key, change, member, currentValue, newValue)
-
-			if err := patchConfigValue(ctx, member, a.ConfigMapName, a.Key, newValue, epoch); err != nil {
-				return fmt.Errorf("failed to patch config value on %s: %w", member, err)
-			}
-
-			actionPast := "incremented"
-			if diff < 0 {
-				actionPast = "decremented"
-			}
-			fmt.Printf("successfully %s %s/%s to %d on %s\n", actionPast, a.ConfigMapName, a.Key, newValue, member)
-
-			// Execute onChange action if configured
-			if a.OnChange != nil {
-				if err := a.OnChange.Execute(ctx, member, "default", epoch); err != nil {
-					return fmt.Errorf("failed to execute onChange action on %s: %w", member, err)
-				}
+		// Execute onChange action if configured
+		if a.OnChange != nil {
+			if err := a.OnChange.Execute(ctx, member, "default", epoch); err != nil {
+				return fmt.Errorf("failed to execute onChange action on %s: %w", member, err)
 			}
 		}
 	}
-
 	return nil
 }
 

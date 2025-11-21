@@ -14,9 +14,11 @@ const WATCH_INTERVAL = 1 * time.Second
 func Conduct(ctx context.Context, tasks []task.Task, epoch int64) {
 	var wg sync.WaitGroup
 	for _, t := range tasks {
-		wg.Go(func() {
+		wg.Add(1)
+		go func(t task.Task) {
+			defer wg.Done()
 			watch(ctx, t, epoch)
-		})
+		}(t)
 	}
 	wg.Wait()
 }
