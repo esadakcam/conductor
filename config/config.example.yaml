@@ -1,9 +1,9 @@
 name: ctrl2
 
 db:
-  - http://localhost:2379
-  - http://localhost:2479
-  - http://localhost:2579
+  - http://192.168.1.111:32379
+  - http://192.168.1.112:32379
+  - http://192.168.1.113:32379
 
 server:
   port: 8080
