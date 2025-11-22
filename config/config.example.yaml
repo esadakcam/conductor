@@ -1,9 +1,12 @@
 name: ctrl2
 
 db:
-  - http://192.168.1.111:32379
-  - http://192.168.1.112:32379
-  - http://192.168.1.113:32379
+  - http://localhost:2379
+  - http://localhost:2479
+  - http://localhost:2579
+  # - http://192.168.1.111:2379
+  # - http://192.168.1.112:2379
+  # - http://192.168.1.113:2379
 
 server:
   port: 8080
@@ -46,6 +49,9 @@ tasks:
       sum: 10
       members:
         - "http://localhost:8080"
+        # - "http://192.168.1.111:8080"
+        # - "http://192.168.1.112:8080"
+        # - "http://192.168.1.113:8080"
       onChange:
         - type: "deployment_restart" 
           deployment: "nginx"

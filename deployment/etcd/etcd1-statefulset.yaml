@@ -1,36 +1,14 @@
 apiVersion: v1
-kind: Service
+kind: Namespace
 metadata:
-  name: etcd1
-  labels:
-    app: etcd
-    instance: etcd1
-spec:
-  type: NodePort
-  ports:
-  - port: 2379
-    targetPort: 2379
-    protocol: TCP
-    name: client
-    nodePort: 32379
-  - port: 2380
-    targetPort: 2380
-    protocol: TCP
-    name: peer
-    nodePort: 32380
-  selector:
-    app: etcd
-    instance: etcd1
+  name: etcd
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: etcd1
-  labels:
-    app: etcd
-    instance: etcd1
+  namespace: etcd
 spec:
-  serviceName: etcd1
   replicas: 1
   selector:
     matchLabels:
@@ -42,55 +20,58 @@ spec:
         app: etcd
         instance: etcd1
     spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
-      - name: etcd
-        image: quay.io/coreos/etcd:v3.5.9
-        ports:
-        - containerPort: 2379
-          name: client
-        - containerPort: 2380
-          name: peer
-        env:
-        - name: ETCD_NAME
-          value: "etcd1"
-        - name: ETCD_DATA_DIR
-          value: "/etcd-data"
-        - name: ETCD_LISTEN_CLIENT_URLS
-          value: "http://0.0.0.0:2379"
-        - name: ETCD_ADVERTISE_CLIENT_URLS
-          value: "http://192.168.1.111:32379"
-        - name: ETCD_LISTEN_PEER_URLS
-          value: "http://0.0.0.0:2380"
-        - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
-          value: "http://192.168.1.111:32380"
-        - name: ETCD_INITIAL_CLUSTER
-          value: "etcd1=http://192.168.1.111:32380,etcd2=http://192.168.1.112:32380,etcd3=http://192.168.1.113:32380"
-        - name: ETCD_INITIAL_CLUSTER_TOKEN
-          value: "etcd-cluster-1"
-        - name: ETCD_INITIAL_CLUSTER_STATE
-          value: "new"
-        volumeMounts:
-        - name: etcd-data
-          mountPath: /etcd-data
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 2379
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 2379
-          initialDelaySeconds: 5
-          periodSeconds: 5
-  volumeClaimTemplates:
-  - metadata:
-      name: etcd-data
-    spec:
-      accessModes:
-      - ReadWriteOnce
-      resources:
-        requests:
-          storage: 1Gi
-
+        - name: etcd
+          image: quay.io/coreos/etcd:v3.5.9
+          command:
+            - /usr/local/bin/etcd
+          env:
+            - name: ETCD_NAME
+              value: "etcd1"
+            - name: ETCD_DATA_DIR
+              value: "/etcd-data"
+            - name: ETCD_LISTEN_CLIENT_URLS
+              value: "http://0.0.0.0:2379"
+            - name: ETCD_ADVERTISE_CLIENT_URLS
+              value: "http://192.168.1.111:2379"
+            - name: ETCD_LISTEN_PEER_URLS
+              value: "http://0.0.0.0:2380"
+            - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
+              value: "http://192.168.1.111:2380"
+            - name: ETCD_INITIAL_CLUSTER
+              value: "etcd1=http://192.168.1.111:2380,etcd2=http://192.168.1.112:2380,etcd3=http://192.168.1.113:2380"
+            - name: ETCD_INITIAL_CLUSTER_TOKEN
+              value: "etcd-cluster-1"
+            - name: ETCD_INITIAL_CLUSTER_STATE
+              value: "new"
+          ports:
+            - containerPort: 2379
+              name: client
+            - containerPort: 2380
+              name: peer
+          volumeMounts:
+            - name: data
+              mountPath: /etcd-data
+      volumes:
+        - name: data
+          hostPath:
+            path: /var/lib/etcd
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd-client
+  namespace: etcd
+spec:
+  selector:
+    app: etcd
+    instance: etcd1
+  ports:
+    - name: client
+      port: 2379
+      targetPort: 2379
+      protocol: TCP
+  type: ClusterIP
