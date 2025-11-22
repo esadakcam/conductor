@@ -17,6 +17,13 @@ build:
 	@go build -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
+## build-amd64: Build the application for Linux amd64
+build-amd64:
+	@echo "Building $(BINARY_NAME) for Linux amd64..."
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(MAIN_PATH)
+	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64"
+
 ## run: Run the application
 run:
 	@go run $(MAIN_PATH)
