@@ -43,7 +43,7 @@ tasks:
       type: "config_value_sum"
       config_map: "nginx-data"
       key: "value"
-      sum: 30
+      sum: 10
       members:
         - "http://localhost:8080"
       onChange:

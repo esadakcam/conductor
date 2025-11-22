@@ -271,7 +271,7 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, di
 	}
 
 	// Apply changes to all members
-	for _, member := range a.Members {
+	for member, currentValue := range curSumMap {
 		change := baseChange
 		if member == remainderMember {
 			change += remainder
@@ -280,8 +280,6 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, di
 		if change == 0 {
 			continue
 		}
-
-		currentValue := curSumMap[member]
 		var newValue int
 		if diff > 0 {
 			newValue = currentValue + change
@@ -358,45 +356,101 @@ func (o *OnChangeDeploymentRestart) Execute(ctx context.Context, member string, 
 }
 
 func fetchConfigValue(ctx context.Context, member string, configMapName string, key string) (int, error) {
+	const (
+		maxRetries     = 3
+		initialBackoff = 500 * time.Millisecond
+		maxBackoff     = 4 * time.Second
+	)
+
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/api/v1/configmaps/default/%s", member, configMapName), nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create request to %s: %w", member, err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("failed to make request to %s: %w", member, err)
-	}
-	defer resp.Body.Close()
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read response body from %s: %w", member, err)
+	url := fmt.Sprintf("%s/api/v1/configmaps/default/%s", member, configMapName)
+
+	var lastErr error
+	backoff := initialBackoff
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			logger.Infof("fetchConfigValue: retrying attempt %d/%d for %s after %v", attempt, maxRetries, url, backoff)
+			select {
+			case <-ctx.Done():
+				return 0, fmt.Errorf("context cancelled while retrying: %w", ctx.Err())
+			case <-time.After(backoff):
+			}
+			// Exponential backoff with jitter
+			backoff = time.Duration(float64(backoff) * 2.0)
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to create request to %s: %w", member, err)
+			continue
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to make request to %s: %w", member, err)
+			logger.Warnf("fetchConfigValue: request failed (attempt %d/%d): %v", attempt+1, maxRetries+1, err)
+			continue
+		}
+
+		// Check for retryable HTTP status codes
+		if resp.StatusCode >= 500 || resp.StatusCode == 429 {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("received retryable status code %d from %s", resp.StatusCode, member)
+			logger.Warnf("fetchConfigValue: received status %d (attempt %d/%d)", resp.StatusCode, attempt+1, maxRetries+1)
+			continue
+		}
+
+		// Non-retryable error status codes
+		if resp.StatusCode >= 400 {
+			resp.Body.Close()
+			return 0, fmt.Errorf("received non-retryable status code %d from %s", resp.StatusCode, member)
+		}
+
+		bodyBytes, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = fmt.Errorf("failed to read response body from %s: %w", member, err)
+			logger.Warnf("fetchConfigValue: failed to read response body (attempt %d/%d): %v", attempt+1, maxRetries+1, err)
+			continue
+		}
+
+		var configMap struct {
+			Data map[string]string `json:"data"`
+		}
+		if err := json.Unmarshal(bodyBytes, &configMap); err != nil {
+			lastErr = fmt.Errorf("failed to parse ConfigMap JSON from %s: %w", member, err)
+			logger.Warnf("fetchConfigValue: failed to parse JSON (attempt %d/%d): %v", attempt+1, maxRetries+1, err)
+			continue
+		}
+
+		if key == "" {
+			return 0, fmt.Errorf("key is required but not specified for ConfigMap %s from %s", configMapName, member)
+		}
+
+		valueStr, exists := configMap.Data[key]
+		if !exists {
+			return 0, fmt.Errorf("key '%s' not found in ConfigMap data from %s", key, member)
+		}
+
+		value, err := strconv.Atoi(strings.TrimSpace(valueStr))
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse value '%s' as integer from %s: %w", valueStr, member, err)
+		}
+
+		if attempt > 0 {
+			logger.Infof("fetchConfigValue: successfully fetched config value after %d retries from %s", attempt, member)
+		}
+
+		return value, nil
 	}
 
-	var configMap struct {
-		Data map[string]string `json:"data"`
-	}
-	if err := json.Unmarshal(bodyBytes, &configMap); err != nil {
-		return 0, fmt.Errorf("failed to parse ConfigMap JSON from %s: %w", member, err)
-	}
-
-	if key == "" {
-		return 0, fmt.Errorf("key is required but not specified for ConfigMap %s from %s", configMapName, member)
-	}
-
-	valueStr, exists := configMap.Data[key]
-	if !exists {
-		return 0, fmt.Errorf("key '%s' not found in ConfigMap data from %s", key, member)
-	}
-
-	value, err := strconv.Atoi(strings.TrimSpace(valueStr))
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse value '%s' as integer from %s: %w", valueStr, member, err)
-	}
-
-	return value, nil
+	return 0, fmt.Errorf("failed to fetch config value after %d attempts: %w", maxRetries+1, lastErr)
 }
 
 func patchResource(ctx context.Context, member string, resource string, namespace string, name string, patchData map[string]interface{}, epoch int64) error {
