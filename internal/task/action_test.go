@@ -716,7 +716,8 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 			},
 			setupServers: func() (map[string]*httptest.Server, func()) {
 				servers := make(map[string]*httptest.Server)
-				// Member1 returns 1 (will be decremented to 0, not negative)
+				// Member1 returns 1 (target sum 5 / 2 members = 2, remainder 1)
+				// Map iteration order is non-deterministic, so remainder goes to whichever member is processed first
 				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
 						response := map[string]interface{}{
@@ -731,13 +732,16 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 						patch := body["patch"].(map[string]interface{})
 						data := patch["data"].(map[string]interface{})
 						value := data["replicas"].(string)
-						if value != "0" {
-							t.Errorf("expected value to be 0 (not negative), got %s", value)
+						// Target sum 5 / 2 = 2, remainder 1
+						// One member gets 3 (2+1), the other gets 2
+						// Map iteration order determines which gets the remainder
+						if value != "2" && value != "3" {
+							t.Errorf("expected value to be 2 or 3 (target sum 5 distributed evenly: 5/2=2 remainder 1), got %s", value)
 						}
 						w.WriteHeader(http.StatusOK)
 					}
 				}))
-				// Member2 returns 10
+				// Member2 returns 10 (target sum 5 / 2 members = 2, remainder 1)
 				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
 						response := map[string]interface{}{
@@ -747,6 +751,17 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 						}
 						json.NewEncoder(w).Encode(response)
 					} else if r.Method == "PATCH" {
+						var body map[string]interface{}
+						json.NewDecoder(r.Body).Decode(&body)
+						patch := body["patch"].(map[string]interface{})
+						data := patch["data"].(map[string]interface{})
+						value := data["replicas"].(string)
+						// Target sum 5 / 2 = 2, remainder 1
+						// One member gets 3 (2+1), the other gets 2
+						// Map iteration order determines which gets the remainder
+						if value != "2" && value != "3" {
+							t.Errorf("expected value to be 2 or 3 (target sum 5 distributed evenly: 5/2=2 remainder 1), got %s", value)
+						}
 						w.WriteHeader(http.StatusOK)
 					}
 				}))
@@ -811,6 +826,9 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 							},
 						}
 						json.NewEncoder(w).Encode(response)
+					} else if r.Method == "PATCH" {
+						// Handle PATCH request for creating/updating the nonexistent key
+						w.WriteHeader(http.StatusOK)
 					}
 				}))
 				cleanup := func() {
@@ -820,7 +838,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 				}
 				return servers, cleanup
 			},
-			expectedError: false, // Error is logged but doesn't stop execution
+			expectedError: false,
 		},
 	}
 

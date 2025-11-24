@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -222,8 +221,7 @@ func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64) error {
 		return nil
 	}
 
-	diff := a.Sum - curSum
-	return a.distributeAndApplyChanges(ctx, diff, curSumMap, epoch)
+	return a.distributeAndApplyChanges(ctx, curSumMap, epoch)
 }
 
 func (a *ActionConfigValueSum) fetchCurrentValues(ctx context.Context) map[string]int {
@@ -249,67 +247,34 @@ func (a *ActionConfigValueSum) fetchCurrentValues(ctx context.Context) map[strin
 	return curSumMap
 }
 
-func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, diff int, curSumMap map[string]int, epoch int64) error {
-	absDiff := diff
-	actionVerb := "incrementing"
-	if diff < 0 {
-		absDiff = -diff
-		actionVerb = "decrementing"
-		logger.Infof("config value sum is greater than the sum, need to decrement by %d", absDiff)
-	} else {
-		logger.Infof("config value sum is less than the sum, need to increment by %d", diff)
+func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, curSumMap map[string]int, epoch int64) error {
+	if len(curSumMap) == 0 {
+		logger.Warnf("no members available to patch %s/%s", a.ConfigMapName, a.Key)
+		return nil
 	}
-
-	// Distribute diff across members
-	baseChange := absDiff / len(a.Members)
-	remainder := absDiff % len(a.Members)
-
-	// Pick one random member to get the remainder
-	remainderMember := ""
-	if remainder > 0 {
-		remainderMember = a.Members[rand.Intn(len(a.Members))]
-	}
-
-	// Apply changes to all members
+	availableMemberSize := len(curSumMap)
+	perMemberValue := a.Sum / availableMemberSize
+	remainder := a.Sum % availableMemberSize
 	for member, currentValue := range curSumMap {
-		change := baseChange
-		if member == remainderMember {
-			change += remainder
+		newValue := perMemberValue
+		if remainder > 0 {
+			newValue++
+			remainder--
 		}
 
-		if change == 0 {
-			continue
-		}
-		var newValue int
-		if diff > 0 {
-			newValue = currentValue + change
-		} else {
-			newValue = currentValue - change
-			if newValue < 0 {
-				// Can't decrement below 0, so only decrement what we can
-				change = currentValue
-				newValue = 0
-			}
-		}
-
-		if change == 0 {
+		if newValue == currentValue {
 			continue
 		}
 
-		logger.Infof("%s %s/%s by %d on %s (from %d to %d)", actionVerb, a.ConfigMapName, a.Key, change, member, currentValue, newValue)
+		logger.Infof("patched %s/%s on %s from %d to %d", a.ConfigMapName, a.Key, member, currentValue, newValue)
 
 		if err := patchConfigValue(ctx, member, a.ConfigMapName, a.Key, newValue, epoch); err != nil {
 			logger.Errorf("ActionConfigValueSum: failed to patch config value %s/%s on %s: %v", a.ConfigMapName, a.Key, member, err)
 			return fmt.Errorf("failed to patch config value on %s: %w", member, err)
 		}
 
-		actionPast := "incremented"
-		if diff < 0 {
-			actionPast = "decremented"
-		}
-		logger.Infof("successfully %s %s/%s to %d on %s", actionPast, a.ConfigMapName, a.Key, newValue, member)
+		logger.Infof("successfully patched %s/%s on %s from %d to %d", a.ConfigMapName, a.Key, member, currentValue, newValue)
 
-		// Execute onChange action if configured
 		if a.OnChange != nil {
 			if err := a.OnChange.Execute(ctx, member, "default", epoch); err != nil {
 				logger.Errorf("ActionConfigValueSum: failed to execute onChange action on %s: %v", member, err)
@@ -435,7 +400,7 @@ func fetchConfigValue(ctx context.Context, member string, configMapName string, 
 
 		valueStr, exists := configMap.Data[key]
 		if !exists {
-			return 0, fmt.Errorf("key '%s' not found in ConfigMap data from %s", key, member)
+			return 0, nil
 		}
 
 		value, err := strconv.Atoi(strings.TrimSpace(valueStr))
