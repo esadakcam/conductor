@@ -41,7 +41,7 @@ spec:
             - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
               value: "http://192.168.1.111:2380"
             - name: ETCD_INITIAL_CLUSTER
-              value: "etcd1=http://192.168.1.111:2380,etcd2=http://192.168.1.112:2380,etcd3=http://192.168.1.113:2380"
+              value: "etcd1=http://192.168.1.111:2380,etcd2=http://192.168.1.111:23801,etcd3=http://192.168.1.111:23802"
             - name: ETCD_INITIAL_CLUSTER_TOKEN
               value: "etcd-cluster-1"
             - name: ETCD_INITIAL_CLUSTER_STATE

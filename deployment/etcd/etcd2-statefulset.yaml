@@ -33,23 +33,23 @@ spec:
             - name: ETCD_DATA_DIR
               value: "/etcd-data"
             - name: ETCD_LISTEN_CLIENT_URLS
-              value: "http://0.0.0.0:2379"
+              value: "http://0.0.0.0:23791"
             - name: ETCD_ADVERTISE_CLIENT_URLS
-              value: "http://192.168.1.112:2379"
+              value: "http://192.168.1.111:23791"
             - name: ETCD_LISTEN_PEER_URLS
-              value: "http://0.0.0.0:2380"
+              value: "http://0.0.0.0:23801"
             - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
-              value: "http://192.168.1.112:2380"
+              value: "http://192.168.1.111:23801"
             - name: ETCD_INITIAL_CLUSTER
-              value: "etcd1=http://192.168.1.111:2380,etcd2=http://192.168.1.112:2380,etcd3=http://192.168.1.113:2380"
+              value: "etcd1=http://192.168.1.111:2380,etcd2=http://192.168.1.111:23801,etcd3=http://192.168.1.111:23802"
             - name: ETCD_INITIAL_CLUSTER_TOKEN
               value: "etcd-cluster-1"
             - name: ETCD_INITIAL_CLUSTER_STATE
               value: "new"
           ports:
-            - containerPort: 2379
+            - containerPort: 23791
               name: client
-            - containerPort: 2380
+            - containerPort: 23801
               name: peer
           volumeMounts:
             - name: data
@@ -57,7 +57,7 @@ spec:
       volumes:
         - name: data
           hostPath:
-            path: /var/lib/etcd
+            path: /var/lib/etcd2
             type: DirectoryOrCreate
 ---
 apiVersion: v1
@@ -71,7 +71,7 @@ spec:
     instance: etcd2
   ports:
     - name: client
-      port: 2379
-      targetPort: 2379
+      port: 23791
+      targetPort: 23791
       protocol: TCP
   type: ClusterIP
