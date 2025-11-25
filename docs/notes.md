@@ -1,0 +1,12 @@
+- Each **Conductor** instance runs on a member cluster.
+- Each instance has RBAC permissions scoped to its own cluster.
+- A central **etcd** database runs separately.
+- Using etcd’s campaign and election API, a leader is selected. Each cluster continuously attempts to acquire leadership.
+- When an instance becomes leader, it increments a fencing epoch in the database within a transaction.
+- If the leader successfully increments the epoch, it starts conducting tasks.
+- Each task consists of a set of conditions and actions that will be executed when those conditions are met.
+- An example action is: update a ConfigMap on `member2` and restart a Deployment on `member2`.
+- The leader communicates with followers via a REST API.
+- In each request, the leader includes its epoch number.
+- A follower checks the database to verify that the epoch number is up to date (to prevent zombie leaders). If it is valid, the follower executes the requested task.
+- It is guaranteed that at any given time there is exactly one valid leader.
