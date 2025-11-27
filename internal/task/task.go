@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/esadakcam/conductor/internal/httpclient"
 	"github.com/esadakcam/conductor/internal/logger"
 )
 
@@ -22,9 +23,7 @@ func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	client := httpclient.Get()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", c.Endpoint, nil)
 	if err != nil {
@@ -68,9 +67,7 @@ func (c *ConditionEndpointValue) Evaluate(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	client := httpclient.Get()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", c.Endpoint, nil)
 	if err != nil {
@@ -174,9 +171,7 @@ func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64) error {
 	}
 
 	// Execute request
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	client := httpclient.Get()
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -327,9 +322,7 @@ func fetchConfigValue(ctx context.Context, member string, configMapName string, 
 		maxBackoff     = 4 * time.Second
 	)
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	client := httpclient.Get()
 	url := fmt.Sprintf("%s/api/v1/configmaps/default/%s", member, configMapName)
 
 	var lastErr error
@@ -431,9 +424,7 @@ func patchResource(ctx context.Context, member string, resource string, namespac
 	}
 
 	// Make PATCH request
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	client := httpclient.Get()
 
 	patchURL := fmt.Sprintf("%s/api/v1/%s/%s/%s", member, resource, namespace, name)
 	req, err := http.NewRequestWithContext(ctx, "PATCH", patchURL, bytes.NewBuffer(patchBody))

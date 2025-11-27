@@ -9,7 +9,7 @@ import (
 	"github.com/esadakcam/conductor/internal/task"
 )
 
-const WATCH_INTERVAL = 1 * time.Second
+const watchInterval = 1 * time.Second
 
 func Conduct(ctx context.Context, tasks []task.Task, epoch int64) {
 	var wg sync.WaitGroup
@@ -29,7 +29,7 @@ func watch(ctx context.Context, task task.Task, epoch int64) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(WATCH_INTERVAL):
+		case <-time.After(watchInterval):
 			result, err := task.When.Evaluate(ctx)
 			if err != nil {
 				logger.Errorf("Error evaluating condition: %v", err)
