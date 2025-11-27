@@ -3,10 +3,11 @@ sequenceDiagram
     participant OldLeader as Instance 1
     participant DB as Central Etcd
     participant NewLeader as Instance 2
-    participant Follower as Member Cluster
+    participant Follower as Instance 3
 
     OldLeader->>DB: Campaign for Leadership
     NewLeader->>DB: Campaign for Leadership
+    Follower->>DB: Campaign for Leadership
     DB-->>OldLeader: Election Win!
     OldLeader->>DB: TXN: Increment Epoch to 1
     DB->>OldLeader: TXN: Success
