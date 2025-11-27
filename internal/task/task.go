@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/esadakcam/conductor/internal/httpclient"
 	"github.com/esadakcam/conductor/internal/logger"
+	"github.com/esadakcam/conductor/internal/utils/httpclient"
 )
 
 func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context) (bool, error) {
