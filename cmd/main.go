@@ -25,7 +25,10 @@ func main() {
 		cancel()
 	}()
 
-	configPath := "/Users/esad/Projects/conductor/config/config.example.yaml"
+	configPath := os.Getenv("CONDUCTOR_CONFIG")
+	if configPath == "" {
+		configPath = "config/config.example.yaml"
+	}
 	if len(os.Args) > 1 {
 		configPath = os.Args[1]
 	}
