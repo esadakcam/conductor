@@ -896,6 +896,278 @@ func TestOnChangeDeploymentRestart_GetType(t *testing.T) {
 	}
 }
 
+func TestActionK8sExecDeployment_GetType(t *testing.T) {
+	action := &ActionK8sExecDeployment{}
+	if action.GetType() != ActionTypeK8sExecDeployment {
+		t.Errorf("expected GetType() to return ActionTypeK8sExecDeployment, got %v", action.GetType())
+	}
+}
+
+func TestActionK8sExecDeployment_Execute(t *testing.T) {
+	tests := []struct {
+		name          string
+		action        *ActionK8sExecDeployment
+		epoch         int64
+		serverHandler http.HandlerFunc
+		expectedError bool
+		errorContains string
+	}{
+		{
+			name: "successful execution with default namespace",
+			action: &ActionK8sExecDeployment{
+				Deployment: "my-deployment",
+				Command:    []string{"echo", "hello"},
+			},
+			epoch: 123,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "POST" {
+					t.Errorf("expected POST method, got %s", r.Method)
+				}
+				expectedPath := "/api/v1/exec/deployments/default/my-deployment"
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+				if r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("expected Content-Type application/json, got %s", r.Header.Get("Content-Type"))
+				}
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("failed to decode request body: %v", err)
+				}
+				if epoch, ok := body["epoch"].(float64); !ok || epoch != 123 {
+					t.Errorf("expected epoch 123, got %v", body["epoch"])
+				}
+				cmd, ok := body["command"].([]interface{})
+				if !ok {
+					t.Errorf("expected command in body")
+				}
+				if len(cmd) != 2 || cmd[0] != "echo" || cmd[1] != "hello" {
+					t.Errorf("expected command [echo hello], got %v", cmd)
+				}
+				if _, ok := body["container"]; ok {
+					t.Errorf("expected no container in body when not specified")
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"deploymentName": "my-deployment",
+					"namespace":      "default",
+					"results":        []interface{}{},
+				})
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful execution with custom namespace",
+			action: &ActionK8sExecDeployment{
+				Deployment: "my-deployment",
+				Namespace:  "custom-ns",
+				Command:    []string{"ls", "-la"},
+			},
+			epoch: 456,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				expectedPath := "/api/v1/exec/deployments/custom-ns/my-deployment"
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{})
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful execution with container specified",
+			action: &ActionK8sExecDeployment{
+				Deployment: "my-deployment",
+				Container:  "sidecar",
+				Command:    []string{"cat", "/etc/config"},
+			},
+			epoch: 789,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("failed to decode request body: %v", err)
+				}
+				container, ok := body["container"].(string)
+				if !ok || container != "sidecar" {
+					t.Errorf("expected container 'sidecar', got %v", body["container"])
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{})
+			},
+			expectedError: false,
+		},
+		{
+			name: "missing deployment name returns error",
+			action: &ActionK8sExecDeployment{
+				Deployment: "",
+				Command:    []string{"echo"},
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "deployment name is required",
+		},
+		{
+			name: "missing member returns error",
+			action: &ActionK8sExecDeployment{
+				Deployment: "my-deployment",
+				Command:    []string{"echo"},
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "member is required",
+		},
+		{
+			name: "missing command returns error",
+			action: &ActionK8sExecDeployment{
+				Member:     "http://localhost:8080",
+				Deployment: "my-deployment",
+				Command:    []string{},
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "command is required",
+		},
+		{
+			name: "nil command returns error",
+			action: &ActionK8sExecDeployment{
+				Member:     "http://localhost:8080",
+				Deployment: "my-deployment",
+				Command:    nil,
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "command is required",
+		},
+		{
+			name: "HTTP 400 Bad Request returns error",
+			action: &ActionK8sExecDeployment{
+				Deployment: "my-deployment",
+				Command:    []string{"echo"},
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "command is required",
+					"code":  400,
+				})
+			},
+			expectedError: true,
+			errorContains: "status code 400",
+		},
+		{
+			name: "HTTP 404 Not Found returns error",
+			action: &ActionK8sExecDeployment{
+				Deployment: "nonexistent",
+				Command:    []string{"echo"},
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte("deployment not found"))
+			},
+			expectedError: true,
+			errorContains: "status code 404",
+		},
+		{
+			name: "HTTP 409 Conflict (stale epoch) returns error",
+			action: &ActionK8sExecDeployment{
+				Deployment: "my-deployment",
+				Command:    []string{"echo"},
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "stale epoch",
+					"code":  409,
+				})
+			},
+			expectedError: true,
+			errorContains: "status code 409",
+		},
+		{
+			name: "HTTP 500 Internal Server Error returns error",
+			action: &ActionK8sExecDeployment{
+				Deployment: "my-deployment",
+				Command:    []string{"echo"},
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("internal error"))
+			},
+			expectedError: true,
+			errorContains: "status code 500",
+		},
+		{
+			name: "complex command with arguments",
+			action: &ActionK8sExecDeployment{
+				Deployment: "my-deployment",
+				Command:    []string{"sh", "-c", "echo $HOME && ls -la /tmp"},
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				json.NewDecoder(r.Body).Decode(&body)
+				cmd := body["command"].([]interface{})
+				if len(cmd) != 3 {
+					t.Errorf("expected 3 command parts, got %d", len(cmd))
+				}
+				if cmd[0] != "sh" || cmd[1] != "-c" || cmd[2] != "echo $HOME && ls -la /tmp" {
+					t.Errorf("unexpected command: %v", cmd)
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{})
+			},
+			expectedError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up test server if handler is provided
+			if tt.serverHandler != nil {
+				server := httptest.NewServer(tt.serverHandler)
+				defer server.Close()
+				tt.action.Member = server.URL
+			}
+
+			err := tt.action.Execute(context.Background(), tt.epoch)
+
+			if tt.expectedError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("expected error containing %q, got %q", tt.errorContains, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestActionK8sExecDeployment_Execute_InvalidEndpoint(t *testing.T) {
+	action := &ActionK8sExecDeployment{
+		Member:     "http://invalid-endpoint-that-does-not-exist-12345.local",
+		Deployment: "my-deployment",
+		Command:    []string{"echo"},
+	}
+
+	err := action.Execute(context.Background(), 1)
+
+	if err == nil {
+		t.Errorf("expected error for invalid endpoint, got none")
+	}
+}
+
 func TestOnChangeDeploymentRestart_Execute(t *testing.T) {
 	tests := []struct {
 		name          string
