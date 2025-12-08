@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/logger"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/kind/pkg/cluster"
@@ -90,15 +91,6 @@ func TestMain(m *testing.M) {
 	provider.Delete(clusterName, "")
 	os.Remove(kubeconfigPath)
 
-	// Also cleanup k8s_client test cluster if it was created
-	if k8sClientTestClusterName != "" && k8sClientTestProvider != nil {
-		logger.Infof("Deleting k8s_client test cluster %s...", k8sClientTestClusterName)
-		k8sClientTestProvider.Delete(k8sClientTestClusterName, "")
-	}
-	if k8sClientTestKubeconfigPath != "" {
-		os.Remove(k8sClientTestKubeconfigPath)
-	}
-
 	os.Exit(code)
 }
 
@@ -133,7 +125,7 @@ func TestIntegrationHandlers(t *testing.T) {
 		t.Skip("Skipping integration tests: no kubeconfig available")
 	}
 
-	k8sClient, err := NewK8sClient(kubeconfigPath)
+	k8sClient, err := k8s.NewClient(kubeconfigPath)
 	if err != nil {
 		t.Fatalf("Failed to create K8s client: %v", err)
 	}

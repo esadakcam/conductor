@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/esadakcam/conductor/internal/cluster"
+	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/server"
 	"github.com/esadakcam/conductor/internal/utils"
@@ -55,7 +56,7 @@ func main() {
 	defer etcdClient.Close()
 
 	// Initialize Kubernetes client
-	k8sClient, err := server.NewK8sClient("")
+	k8sClient, err := k8s.NewClient("")
 	if err != nil {
 		logger.Fatalf("Failed to initialize Kubernetes client: %v", err)
 	}

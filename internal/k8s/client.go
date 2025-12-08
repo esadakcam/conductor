@@ -1,4 +1,4 @@
-package server
+package k8s
 
 import (
 	"context"
@@ -16,15 +16,15 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-// K8sClient wraps the Kubernetes dynamic client
-type K8sClient struct {
+// Client wraps the Kubernetes dynamic client
+type Client struct {
 	client dynamic.Interface
 }
 
-// NewK8sClient creates a new K8sClient
+// NewClient creates a new Client
 // It accepts an optional kubeconfig path or config object.
 // If no arguments are provided, it tries to load from default locations.
-func NewK8sClient(kubeconfigPath string) (*K8sClient, error) {
+func NewClient(kubeconfigPath string) (*Client, error) {
 	var config *rest.Config
 	var err error
 
@@ -61,12 +61,12 @@ func NewK8sClient(kubeconfigPath string) (*K8sClient, error) {
 		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
-	return &K8sClient{
+	return &Client{
 		client: client,
 	}, nil
 }
 
-func (c *K8sClient) getGVR(resource string) (schema.GroupVersionResource, error) {
+func (c *Client) getGVR(resource string) (schema.GroupVersionResource, error) {
 	switch resource {
 	case "pods":
 		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, nil
@@ -86,7 +86,7 @@ func (c *K8sClient) getGVR(resource string) (schema.GroupVersionResource, error)
 }
 
 // Get retrieves an object
-func (c *K8sClient) Get(ctx context.Context, resource, namespace, name string) (*unstructured.Unstructured, error) {
+func (c *Client) Get(ctx context.Context, resource, namespace, name string) (*unstructured.Unstructured, error) {
 	gvr, err := c.getGVR(resource)
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func (c *K8sClient) Get(ctx context.Context, resource, namespace, name string) (
 }
 
 // List retrieves objects in a namespace (or all namespaces if namespace is empty)
-func (c *K8sClient) List(ctx context.Context, resource, namespace string) (*unstructured.UnstructuredList, error) {
+func (c *Client) List(ctx context.Context, resource, namespace string) (*unstructured.UnstructuredList, error) {
 	gvr, err := c.getGVR(resource)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (c *K8sClient) List(ctx context.Context, resource, namespace string) (*unst
 }
 
 // Create creates an object
-func (c *K8sClient) Create(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+func (c *Client) Create(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 	gvr, err := c.getGVR(resource)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func (c *K8sClient) Create(ctx context.Context, resource, namespace string, obj 
 }
 
 // Update updates an object
-func (c *K8sClient) Update(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+func (c *Client) Update(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 	gvr, err := c.getGVR(resource)
 	if err != nil {
 		return nil, err
@@ -129,7 +129,7 @@ func (c *K8sClient) Update(ctx context.Context, resource, namespace string, obj 
 }
 
 // Patch patches an object
-func (c *K8sClient) Patch(ctx context.Context, resource, namespace, name string, pt types.PatchType, data []byte) (*unstructured.Unstructured, error) {
+func (c *Client) Patch(ctx context.Context, resource, namespace, name string, pt types.PatchType, data []byte) (*unstructured.Unstructured, error) {
 	gvr, err := c.getGVR(resource)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func (c *K8sClient) Patch(ctx context.Context, resource, namespace, name string,
 }
 
 // Delete deletes an object
-func (c *K8sClient) Delete(ctx context.Context, resource, namespace, name string) error {
+func (c *Client) Delete(ctx context.Context, resource, namespace, name string) error {
 	gvr, err := c.getGVR(resource)
 	if err != nil {
 		return err
