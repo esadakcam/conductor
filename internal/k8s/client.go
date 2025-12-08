@@ -1,24 +1,44 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/homedir"
 )
 
+// ExecResult contains the output from executing a command in a pod
+type ExecResult struct {
+	Stdout string
+	Stderr string
+}
+
+// PodExecResult contains the result of executing a command in a specific pod
+type PodExecResult struct {
+	PodName string
+	Result  *ExecResult
+	Error   error
+}
+
 // Client wraps the Kubernetes dynamic client
 type Client struct {
-	client dynamic.Interface
+	client    dynamic.Interface
+	clientset *kubernetes.Clientset
+	config    *rest.Config
 }
 
 // NewClient creates a new Client
@@ -61,8 +81,15 @@ func NewClient(kubeconfigPath string) (*Client, error) {
 		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kubernetes clientset: %w", err)
+	}
+
 	return &Client{
-		client: client,
+		client:    client,
+		clientset: clientset,
+		config:    config,
 	}, nil
 }
 
@@ -146,4 +173,104 @@ func (c *Client) Delete(ctx context.Context, resource, namespace, name string) e
 	}
 
 	return c.client.Resource(gvr).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// Exec executes a command in a container within a pod and returns the output.
+// If container is empty, it uses the first container in the pod.
+func (c *Client) Exec(ctx context.Context, namespace, podName, container string, command []string) (*ExecResult, error) {
+	req := c.clientset.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: container,
+			Command:   command,
+			Stdin:     false,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       false,
+		}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(c.config, "POST", req.URL())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create executor: %w", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if err != nil {
+		return &ExecResult{
+			Stdout: stdout.String(),
+			Stderr: stderr.String(),
+		}, fmt.Errorf("exec failed: %w", err)
+	}
+
+	return &ExecResult{
+		Stdout: stdout.String(),
+		Stderr: stderr.String(),
+	}, nil
+}
+
+// ExecDeployment executes a command on all running pods of a deployment.
+// If container is empty, it uses the first container in each pod.
+// Returns results for each pod, including any errors encountered.
+func (c *Client) ExecDeployment(ctx context.Context, namespace, deploymentName, container string, command []string) ([]PodExecResult, error) {
+	// Get the deployment to find its selector
+	deployment, err := c.Get(ctx, "deployments", namespace, deploymentName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deployment %s: %w", deploymentName, err)
+	}
+
+	// Extract the selector from the deployment spec
+	selector, found, err := unstructured.NestedMap(deployment.Object, "spec", "selector", "matchLabels")
+	if err != nil || !found {
+		return nil, fmt.Errorf("failed to get selector from deployment %s: %w", deploymentName, err)
+	}
+
+	// Build label selector string
+	var labelSelector string
+	for k, v := range selector {
+		if labelSelector != "" {
+			labelSelector += ","
+		}
+		labelSelector += fmt.Sprintf("%s=%s", k, v)
+	}
+
+	// List pods matching the selector
+	pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods for deployment %s: %w", deploymentName, err)
+	}
+
+	if len(pods.Items) == 0 {
+		return nil, fmt.Errorf("no pods found for deployment %s", deploymentName)
+	}
+
+	// Execute command on each running pod
+	var results []PodExecResult
+	for _, pod := range pods.Items {
+		// Skip pods that are not running
+		if pod.Status.Phase != corev1.PodRunning {
+			results = append(results, PodExecResult{
+				PodName: pod.Name,
+				Error:   fmt.Errorf("pod is not running (phase: %s)", pod.Status.Phase),
+			})
+			continue
+		}
+
+		result, err := c.Exec(ctx, namespace, pod.Name, container, command)
+		results = append(results, PodExecResult{
+			PodName: pod.Name,
+			Result:  result,
+			Error:   err,
+		})
+	}
+
+	return results, nil
 }
