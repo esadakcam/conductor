@@ -281,3 +281,69 @@ func (h *Handler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	logger.Infof("Successfully deleted resource %s/%s/%s (epoch: %d)", resource, namespace, name, req.Epoch)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// HandleExecDeployment handles POST /api/v1/exec/deployments/{namespace}/{name}
+// Executes a command on all running pods of a deployment
+func (h *Handler) HandleExecDeployment(w http.ResponseWriter, r *http.Request) {
+	namespace := r.PathValue("namespace")
+	name := r.PathValue("name")
+
+	var req ExecDeploymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Warnf("Invalid request body for exec deployment %s/%s: %v", namespace, name, err)
+		h.sendError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Validate command is provided
+	if len(req.Command) == 0 {
+		logger.Warnf("Missing command for exec deployment %s/%s", namespace, name)
+		h.sendError(w, http.StatusBadRequest, "command is required")
+		return
+	}
+
+	valid, err := h.epochValidator.Validate(r.Context(), req.Epoch)
+	if err != nil {
+		logger.Errorf("Epoch validation failed for exec deployment %s/%s: %v", namespace, name, err)
+		h.sendError(w, http.StatusInternalServerError, fmt.Sprintf("epoch validation failed: %v", err))
+		return
+	}
+	if !valid {
+		logger.Warnf("Stale epoch %d for exec deployment %s/%s", req.Epoch, namespace, name)
+		h.sendError(w, http.StatusConflict, "stale epoch")
+		return
+	}
+
+	results, err := h.k8sClient.ExecDeployment(r.Context(), namespace, name, req.Container, req.Command)
+	if err != nil {
+		logger.Errorf("Failed to exec on deployment %s/%s: %v", namespace, name, err)
+		h.sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Convert k8s.PodExecResult to JSON-serializable format
+	jsonResults := make([]PodExecResultJSON, len(results))
+	for i, r := range results {
+		jsonResults[i] = PodExecResultJSON{
+			PodName: r.PodName,
+		}
+		if r.Result != nil {
+			jsonResults[i].Result = &ExecResultJSON{
+				Stdout: r.Result.Stdout,
+				Stderr: r.Result.Stderr,
+			}
+		}
+		if r.Error != nil {
+			jsonResults[i].Error = r.Error.Error()
+		}
+	}
+
+	response := ExecDeploymentResponse{
+		DeploymentName: name,
+		Namespace:      namespace,
+		Results:        jsonResults,
+	}
+
+	logger.Infof("Successfully executed command on deployment %s/%s (epoch: %d, pods: %d)", namespace, name, req.Epoch, len(results))
+	h.sendJSON(w, http.StatusOK, response)
+}

@@ -445,4 +445,346 @@ func TestIntegrationHandlers(t *testing.T) {
 			t.Error("Expected error getting deleted configmap, got nil")
 		}
 	})
+
+	t.Run("HandleExecDeployment", func(t *testing.T) {
+		ns := setupTestNamespace(t, k8sClient)
+		defer cleanupTestNamespace(t, k8sClient, ns)
+
+		mockEpoch := &MockEpochValidator{}
+		h := NewHandler(k8sClient, mockEpoch)
+
+		// Create a deployment
+		deployName := "exec-test-deploy"
+		deploy := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name": deployName,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "exec-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "exec-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []interface{}{
+								map[string]interface{}{
+									"name":  "busybox",
+									"image": "busybox:latest",
+									"command": []interface{}{
+										"sh",
+										"-c",
+										"while true; do sleep 3600; done",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		_, err := k8sClient.Create(context.Background(), "deployments", ns, deploy)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+
+		// Wait for pod to be running (with timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		var podReady bool
+		for !podReady {
+			select {
+			case <-ctx.Done():
+				t.Fatalf("Timeout waiting for pod to be ready")
+			default:
+				pods, err := k8sClient.List(context.Background(), "pods", ns)
+				if err == nil && len(pods.Items) > 0 {
+					for _, pod := range pods.Items {
+						phase, _, _ := unstructured.NestedString(pod.Object, "status", "phase")
+						if phase == "Running" {
+							podReady = true
+							break
+						}
+					}
+				}
+				if !podReady {
+					time.Sleep(2 * time.Second)
+				}
+			}
+		}
+
+		// Execute command on deployment
+		execBody := ExecDeploymentRequest{
+			Epoch:   1,
+			Command: []string{"echo", "hello"},
+		}
+		bodyBytes, _ := json.Marshal(execBody)
+
+		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/"+deployName, bytes.NewReader(bodyBytes))
+		req.SetPathValue("namespace", ns)
+		req.SetPathValue("name", deployName)
+		w := httptest.NewRecorder()
+
+		h.HandleExecDeployment(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("HandleExecDeployment failed: expected status %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
+		}
+
+		var response ExecDeploymentResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response.DeploymentName != deployName {
+			t.Errorf("Expected deployment name %s, got %s", deployName, response.DeploymentName)
+		}
+		if response.Namespace != ns {
+			t.Errorf("Expected namespace %s, got %s", ns, response.Namespace)
+		}
+		if len(response.Results) == 0 {
+			t.Error("Expected at least one pod result")
+		}
+
+		// Verify we got output from the command
+		for _, result := range response.Results {
+			if result.Error != "" {
+				t.Errorf("Pod %s had error: %s", result.PodName, result.Error)
+			}
+			if result.Result == nil {
+				t.Errorf("Pod %s had nil result", result.PodName)
+			} else if result.Result.Stdout != "hello\n" {
+				t.Errorf("Expected stdout 'hello\\n', got '%s'", result.Result.Stdout)
+			}
+		}
+	})
+
+	t.Run("HandleExecDeployment_FailingCommand", func(t *testing.T) {
+		ns := setupTestNamespace(t, k8sClient)
+		defer cleanupTestNamespace(t, k8sClient, ns)
+
+		mockEpoch := &MockEpochValidator{}
+		h := NewHandler(k8sClient, mockEpoch)
+
+		// Create a deployment
+		deployName := "exec-fail-deploy"
+		deploy := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name": deployName,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "exec-fail-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "exec-fail-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []interface{}{
+								map[string]interface{}{
+									"name":  "busybox",
+									"image": "busybox:latest",
+									"command": []interface{}{
+										"sh",
+										"-c",
+										"while true; do sleep 3600; done",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		_, err := k8sClient.Create(context.Background(), "deployments", ns, deploy)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+
+		// Wait for pod to be running (with timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		var podReady bool
+		for !podReady {
+			select {
+			case <-ctx.Done():
+				t.Fatalf("Timeout waiting for pod to be ready")
+			default:
+				pods, err := k8sClient.List(context.Background(), "pods", ns)
+				if err == nil && len(pods.Items) > 0 {
+					for _, pod := range pods.Items {
+						phase, _, _ := unstructured.NestedString(pod.Object, "status", "phase")
+						if phase == "Running" {
+							podReady = true
+							break
+						}
+					}
+				}
+				if !podReady {
+					time.Sleep(2 * time.Second)
+				}
+			}
+		}
+
+		// Execute a failing command (non-existent command)
+		execBody := ExecDeploymentRequest{
+			Epoch:   1,
+			Command: []string{"nonexistent-command-xyz"},
+		}
+		bodyBytes, _ := json.Marshal(execBody)
+
+		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/"+deployName, bytes.NewReader(bodyBytes))
+		req.SetPathValue("namespace", ns)
+		req.SetPathValue("name", deployName)
+		w := httptest.NewRecorder()
+
+		h.HandleExecDeployment(w, req)
+
+		// The request should still succeed (HTTP 200) but contain error in results
+		if w.Code != http.StatusOK {
+			t.Errorf("HandleExecDeployment failed: expected status %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
+		}
+
+		var response ExecDeploymentResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if len(response.Results) == 0 {
+			t.Fatal("Expected at least one pod result")
+		}
+
+		// Verify the command failed with an error
+		for _, result := range response.Results {
+			if result.Error == "" {
+				t.Errorf("Pod %s expected error for failing command, got none", result.PodName)
+			}
+			// The error should indicate command failure
+			t.Logf("Pod %s error (expected): %s", result.PodName, result.Error)
+		}
+	})
+
+	t.Run("HandleExecDeployment_InvalidBody", func(t *testing.T) {
+		ns := setupTestNamespace(t, k8sClient)
+		defer cleanupTestNamespace(t, k8sClient, ns)
+
+		mockEpoch := &MockEpochValidator{}
+		h := NewHandler(k8sClient, mockEpoch)
+
+		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/test-deploy", bytes.NewReader([]byte("invalid json")))
+		req.SetPathValue("namespace", ns)
+		req.SetPathValue("name", "test-deploy")
+		w := httptest.NewRecorder()
+
+		h.HandleExecDeployment(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+
+	t.Run("HandleExecDeployment_MissingCommand", func(t *testing.T) {
+		ns := setupTestNamespace(t, k8sClient)
+		defer cleanupTestNamespace(t, k8sClient, ns)
+
+		mockEpoch := &MockEpochValidator{}
+		h := NewHandler(k8sClient, mockEpoch)
+
+		execBody := ExecDeploymentRequest{
+			Epoch:   1,
+			Command: []string{},
+		}
+		bodyBytes, _ := json.Marshal(execBody)
+
+		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/test-deploy", bytes.NewReader(bodyBytes))
+		req.SetPathValue("namespace", ns)
+		req.SetPathValue("name", "test-deploy")
+		w := httptest.NewRecorder()
+
+		h.HandleExecDeployment(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "command is required" {
+			t.Errorf("Expected error 'command is required', got '%s'", errResp.Error)
+		}
+	})
+
+	t.Run("HandleExecDeployment_StaleEpoch", func(t *testing.T) {
+		ns := setupTestNamespace(t, k8sClient)
+		defer cleanupTestNamespace(t, k8sClient, ns)
+
+		mockEpoch := &MockEpochValidator{
+			ValidateFunc: func(ctx context.Context, requestEpoch int64) (bool, error) {
+				return false, nil
+			},
+		}
+		h := NewHandler(k8sClient, mockEpoch)
+
+		execBody := ExecDeploymentRequest{
+			Epoch:   1,
+			Command: []string{"echo", "test"},
+		}
+		bodyBytes, _ := json.Marshal(execBody)
+
+		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/test-deploy", bytes.NewReader(bodyBytes))
+		req.SetPathValue("namespace", ns)
+		req.SetPathValue("name", "test-deploy")
+		w := httptest.NewRecorder()
+
+		h.HandleExecDeployment(w, req)
+
+		if w.Code != http.StatusConflict {
+			t.Errorf("Expected status %d, got %d", http.StatusConflict, w.Code)
+		}
+	})
+
+	t.Run("HandleExecDeployment_DeploymentNotFound", func(t *testing.T) {
+		ns := setupTestNamespace(t, k8sClient)
+		defer cleanupTestNamespace(t, k8sClient, ns)
+
+		mockEpoch := &MockEpochValidator{}
+		h := NewHandler(k8sClient, mockEpoch)
+
+		execBody := ExecDeploymentRequest{
+			Epoch:   1,
+			Command: []string{"echo", "test"},
+		}
+		bodyBytes, _ := json.Marshal(execBody)
+
+		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/nonexistent-deploy", bytes.NewReader(bodyBytes))
+		req.SetPathValue("namespace", ns)
+		req.SetPathValue("name", "nonexistent-deploy")
+		w := httptest.NewRecorder()
+
+		h.HandleExecDeployment(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
+		}
+	})
 }

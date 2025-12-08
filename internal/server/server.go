@@ -34,6 +34,9 @@ func NewServer(cfg Config, handler *Handler) *Server {
 	mux.HandleFunc("PATCH /api/v1/{resource}/{namespace}/{name}", handler.HandlePatch)
 	mux.HandleFunc("DELETE /api/v1/{resource}/{namespace}/{name}", handler.HandleDelete)
 
+	// Exec Operations
+	mux.HandleFunc("POST /api/v1/exec/deployments/{namespace}/{name}", handler.HandleExecDeployment)
+
 	return &Server{
 		server: &http.Server{
 			Addr:    fmt.Sprintf(":%d", cfg.Port),
