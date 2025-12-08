@@ -13,9 +13,10 @@ const (
 type ActionType string
 
 const (
-	ActionTypeEndpoint       ActionType = "endpoint"
-	ActionTypeEcho           ActionType = "echo"
-	ActionTypeConfigValueSum ActionType = "config_value_sum"
+	ActionTypeEndpoint          ActionType = "endpoint"
+	ActionTypeEcho              ActionType = "echo"
+	ActionTypeConfigValueSum    ActionType = "config_value_sum"
+	ActionTypeK8sExecDeployment ActionType = "k8s_exec_deployment"
 )
 
 type OnChangeType string
@@ -91,6 +92,15 @@ type ActionConfigValueSum struct {
 type OnChangeDeploymentRestart struct {
 	Type       OnChangeType `yaml:"type"`
 	Deployment string       `yaml:"deployment"`
+}
+
+type ActionK8sExecDeployment struct {
+	Type       ActionType `yaml:"type"`
+	Member     string     `yaml:"member"`
+	Deployment string     `yaml:"deployment"`
+	Namespace  string     `yaml:"namespace,omitempty"`
+	Container  string     `yaml:"container,omitempty"`
+	Command    []string   `yaml:"command"`
 }
 
 // TODO: Add k8s related actions

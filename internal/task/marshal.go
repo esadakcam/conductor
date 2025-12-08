@@ -164,6 +164,12 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			return fmt.Errorf("failed to unmarshal action: %w", err)
 		}
 		t.Then = &action
+	case ActionTypeK8sExecDeployment:
+		var action ActionK8sExecDeployment
+		if err := taskNode.Then.Decode(&action); err != nil {
+			return fmt.Errorf("failed to unmarshal action: %w", err)
+		}
+		t.Then = &action
 	default:
 		return fmt.Errorf("unknown action type: %s", bareAction.Type)
 	}

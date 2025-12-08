@@ -13,92 +13,100 @@ server:
 
 tasks:
   # Scale down cluster 1 and delegate to cluster 2 at night
-  - when:
-    - type: "endpoint_value"
-      endpoint: "https://cluster1.usage-endpoint"
-      operator: "lt"
-      value: 10
-    - type: "endpoint_value"
-      endpoint: "https://cluster2.capacity-endpoint"
-      operator: "gt"
-      value: 75
-    - type: "time"
-      operator: "later"
-      value: 22.00
-    - type: "time"
-      operator: "before"
-      value: 06.00
-    then:
-    - type: "update_configmap"
-      config_map: "amf"
-      member: "https://cluster2:8080"
-      key: "tac"
-      value: |
-        - cluster2 tac
-        - cluster1 tac
-      onChange:
-        - type: "deployment_restart" 
-          deployment: "amf"
-    - type: "update_configmap"
-      config_map: "gnb"
-      member: "https://cluster1:8080"
-      key: "amf_list"
-      value: |
-        - cluster2
-      onChange:
-        - type: "deployment_restart" 
-          deployment: "gnb"
-    - type: "scale_deployment"
-      selector: "open5gs"
-      value: 0
+  # - when:
+  #   - type: "endpoint_value"
+  #     endpoint: "https://cluster1.usage-endpoint"
+  #     operator: "lt"
+  #     value: 10
+  #   - type: "endpoint_value"
+  #     endpoint: "https://cluster2.capacity-endpoint"
+  #     operator: "gt"
+  #     value: 75
+  #   - type: "time"
+  #     operator: "later"
+  #     value: 22.00
+  #   - type: "time"
+  #     operator: "before"
+  #     value: 06.00
+  #   then:
+  #   - type: "update_configmap"
+  #     config_map: "amf"
+  #     member: "https://cluster2:8080"
+  #     key: "tac"
+  #     value: |
+  #       - cluster2 tac
+  #       - cluster1 tac
+  #     onChange:
+  #       - type: "deployment_restart" 
+  #         deployment: "amf"
+  #   - type: "update_configmap"
+  #     config_map: "gnb"
+  #     member: "https://cluster1:8080"
+  #     key: "amf_list"
+  #     value: |
+  #       - cluster2
+  #     onChange:
+  #       - type: "deployment_restart" 
+  #         deployment: "gnb"
+  #   - type: "scale_deployment"
+  #     selector: "open5gs"
+  #     value: 0
 
   # Scale up cluster 1 and remove delegation
-  - when:
-    - type: "configmap_value"
-      key: "tac"
-      value: "cluster1 tac"
-      operator: "contains"
-    - type: "time"
-      operator: "later"
-      value: 06.00
-    - type: "time"
-      operator: "before"
-      value: 22.00
-    then:
-    - type: "update_configmap"
-      config_map: "amf"
-      member: "https://cluster2:8080"
-      key: "tac"
-      value: |
-        - cluster2 tac
-      onChange:
-        - type: "deployment_restart" 
-          deployment: "amf"
-    - type: "update_configmap"
-      config_map: "gnb"
-      member: "https://cluster1:8080"
-      key: "amf_list"
-      value: |
-        - cluster1
-      onChange:
-        - type: "deployment_restart" 
-          deployment: "gnb"
-    - type: "scale_deployment"
-      selector: "open5gs"
-      value: 1
+  # - when:
+  #   - type: "configmap_value"
+  #     key: "tac"
+  #     value: "cluster1 tac"
+  #     operator: "contains"
+  #   - type: "time"
+  #     operator: "later"
+  #     value: 06.00
+  #   - type: "time"
+  #     operator: "before"
+  #     value: 22.00
+  #   then:
+  #   - type: "update_configmap"
+  #     config_map: "amf"
+  #     member: "https://cluster2:8080"
+  #     key: "tac"
+  #     value: |
+  #       - cluster2 tac
+  #     onChange:
+  #       - type: "deployment_restart" 
+  #         deployment: "amf"
+  #   - type: "update_configmap"
+  #     config_map: "gnb"
+  #     member: "https://cluster1:8080"
+  #     key: "amf_list"
+  #     value: |
+  #       - cluster1
+  #     onChange:
+  #       - type: "deployment_restart" 
+  #         deployment: "gnb"
+  #   - type: "scale_deployment"
+  #     selector: "open5gs"
+  #     value: 1
       
+  # - when:
+  #     type: "always_true"
+  #   then:
+  #     type: "config_value_sum"
+  #     config_map: "nginx-data"
+  #     key: "value"
+  #     sum: 10
+  #     members:
+  #       - "http://localhost:8080"
+  #       # - "http://192.168.1.111:8080"
+  #       # - "http://192.168.1.112:8080"
+  #       # - "http://192.168.1.113:8080"
+  #     onChange:
+  #       - type: "deployment_restart" 
+  #         deployment: "nginx"
+
   - when:
       type: "always_true"
     then:
-      type: "config_value_sum"
-      config_map: "nginx-data"
-      key: "value"
-      sum: 10
-      members:
-        - "http://localhost:8080"
-        # - "http://192.168.1.111:8080"
-        # - "http://192.168.1.112:8080"
-        # - "http://192.168.1.113:8080"
-      onChange:
-        - type: "deployment_restart" 
-          deployment: "nginx"
+      type: "k8s_exec_deployment"
+      member: "http://localhost:8080"
+      deployment: "nginx"
+      command: ["ls", "/"]

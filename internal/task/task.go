@@ -134,6 +134,10 @@ func (c *ConditionAlwaysTrue) GetType() ConditionType {
 	return ConditionTypeAlwaysTrue
 }
 
+func (a *ActionEndpoint) GetType() ActionType {
+	return ActionTypeEndpoint
+}
+
 func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64) error {
 	if a.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
@@ -190,17 +194,17 @@ func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64) error {
 	return nil
 }
 
+func (a *ActionEcho) GetType() ActionType {
+	return ActionTypeEcho
+}
+
 func (a *ActionEcho) Execute(ctx context.Context, epoch int64) error {
 	logger.Info(a.Message)
 	return nil
 }
 
-func (a *ActionEndpoint) GetType() ActionType {
-	return ActionTypeEndpoint
-}
-
-func (a *ActionEcho) GetType() ActionType {
-	return ActionTypeEcho
+func (a *ActionConfigValueSum) GetType() ActionType {
+	return ActionTypeConfigValueSum
 }
 
 func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64) error {
@@ -217,6 +221,76 @@ func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64) error {
 	}
 
 	return a.distributeAndApplyChanges(ctx, curSumMap, epoch)
+}
+
+func (a *ActionK8sExecDeployment) GetType() ActionType {
+	return ActionTypeK8sExecDeployment
+}
+
+func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64) error {
+	if a.Deployment == "" {
+		err := fmt.Errorf("deployment name is required")
+		logger.Error("ActionK8sExecDeployment: deployment name is required")
+		return err
+	}
+
+	if a.Member == "" {
+		err := fmt.Errorf("member is required")
+		logger.Error("ActionK8sExecDeployment: member is required")
+		return err
+	}
+
+	if len(a.Command) == 0 {
+		err := fmt.Errorf("command is required")
+		logger.Error("ActionK8sExecDeployment: command is required")
+		return err
+	}
+
+	namespace := a.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	// Build request payload
+	reqPayload := map[string]interface{}{
+		"epoch":   epoch,
+		"command": a.Command,
+	}
+	if a.Container != "" {
+		reqPayload["container"] = a.Container
+	}
+
+	reqBody, err := json.Marshal(reqPayload)
+	if err != nil {
+		logger.Errorf("ActionK8sExecDeployment: failed to marshal request payload: %v", err)
+		return fmt.Errorf("failed to marshal request payload: %w", err)
+	}
+
+	// Make POST request to member
+	url := fmt.Sprintf("%s/api/v1/exec/deployments/%s/%s", a.Member, namespace, a.Deployment)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		logger.Errorf("ActionK8sExecDeployment: failed to create request to %s: %v", url, err)
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := httpclient.Get()
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Errorf("ActionK8sExecDeployment: failed to execute request to %s: %v", url, err)
+		return fmt.Errorf("failed to execute request to %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		logger.Errorf("ActionK8sExecDeployment: request to %s failed with status %d: %s", url, resp.StatusCode, string(bodyBytes))
+		return fmt.Errorf("exec request failed with status code %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	logger.Infof("ActionK8sExecDeployment: successfully executed command on deployment %s/%s via %s", namespace, a.Deployment, a.Member)
+	return nil
 }
 
 func (a *ActionConfigValueSum) fetchCurrentValues(ctx context.Context) map[string]int {
@@ -278,10 +352,6 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, cu
 		}
 	}
 	return nil
-}
-
-func (a *ActionConfigValueSum) GetType() ActionType {
-	return ActionTypeConfigValueSum
 }
 
 func (o *OnChangeDeploymentRestart) GetType() OnChangeType {
