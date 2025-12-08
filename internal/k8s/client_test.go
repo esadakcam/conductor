@@ -1,4 +1,4 @@
-package server
+package k8s
 
 import (
 	"context"
@@ -15,14 +15,34 @@ import (
 )
 
 var (
-	k8sClientTestKubeconfigPath string
-	k8sClientTestClusterName    string
-	k8sClientTestSetupOnce      sync.Once
-	k8sClientTestProvider       *cluster.Provider
+	testKubeconfigPath string
+	testClusterName    string
+	testSetupOnce      sync.Once
+	testProvider       *cluster.Provider
 )
 
-// setupK8sClientTestCluster creates a dedicated kind cluster for k8s_client tests
-func setupK8sClientTestCluster(t *testing.T) {
+func TestMain(m *testing.M) {
+	if os.Getenv("SKIP_INTEGRATION") != "" {
+		os.Exit(m.Run())
+	}
+
+	// Run tests
+	code := m.Run()
+
+	// Cleanup
+	if testClusterName != "" && testProvider != nil {
+		logger.Infof("Deleting k8s client test cluster %s...", testClusterName)
+		testProvider.Delete(testClusterName, "")
+	}
+	if testKubeconfigPath != "" {
+		os.Remove(testKubeconfigPath)
+	}
+
+	os.Exit(code)
+}
+
+// setupTestCluster creates a dedicated kind cluster for k8s client tests
+func setupTestCluster(t *testing.T) {
 	t.Helper()
 
 	if os.Getenv("SKIP_INTEGRATION") != "" {
@@ -30,23 +50,23 @@ func setupK8sClientTestCluster(t *testing.T) {
 	}
 
 	var setupErr error
-	k8sClientTestSetupOnce.Do(func() {
-		// Create a dedicated cluster for k8s_client tests
-		k8sClientTestClusterName = fmt.Sprintf("k8s-client-test-cluster-%d", time.Now().Unix())
-		k8sClientTestProvider = cluster.NewProvider()
+	testSetupOnce.Do(func() {
+		// Create a dedicated cluster for k8s client tests
+		testClusterName = fmt.Sprintf("k8s-client-test-cluster-%d", time.Now().Unix())
+		testProvider = cluster.NewProvider()
 
 		// Check if cluster already exists and delete it if it does
-		existingClusters, _ := k8sClientTestProvider.List()
+		existingClusters, _ := testProvider.List()
 		for _, name := range existingClusters {
-			if name == k8sClientTestClusterName {
-				logger.Infof("Cleaning up existing cluster %s...", k8sClientTestClusterName)
-				k8sClientTestProvider.Delete(k8sClientTestClusterName, "")
+			if name == testClusterName {
+				logger.Infof("Cleaning up existing cluster %s...", testClusterName)
+				testProvider.Delete(testClusterName, "")
 			}
 		}
 
-		logger.Infof("Creating kind cluster %s for k8s_client tests...", k8sClientTestClusterName)
-		err := k8sClientTestProvider.Create(
-			k8sClientTestClusterName,
+		logger.Infof("Creating kind cluster %s for k8s client tests...", testClusterName)
+		err := testProvider.Create(
+			testClusterName,
 			cluster.CreateWithWaitForReady(time.Minute*5),
 		)
 		if err != nil {
@@ -55,10 +75,10 @@ func setupK8sClientTestCluster(t *testing.T) {
 		}
 
 		// Export kubeconfig
-		kubeconfig, err := k8sClientTestProvider.KubeConfig(k8sClientTestClusterName, false)
+		kubeconfig, err := testProvider.KubeConfig(testClusterName, false)
 		if err != nil {
 			setupErr = fmt.Errorf("failed to get kubeconfig: %w", err)
-			k8sClientTestProvider.Delete(k8sClientTestClusterName, "")
+			testProvider.Delete(testClusterName, "")
 			return
 		}
 
@@ -66,38 +86,31 @@ func setupK8sClientTestCluster(t *testing.T) {
 		tmpFile, err := os.CreateTemp("", "k8s-client-kind-kubeconfig-*")
 		if err != nil {
 			setupErr = fmt.Errorf("failed to create temp kubeconfig file: %w", err)
-			k8sClientTestProvider.Delete(k8sClientTestClusterName, "")
+			testProvider.Delete(testClusterName, "")
 			return
 		}
 
 		if _, err := tmpFile.WriteString(kubeconfig); err != nil {
 			setupErr = fmt.Errorf("failed to write kubeconfig: %w", err)
 			tmpFile.Close()
-			k8sClientTestProvider.Delete(k8sClientTestClusterName, "")
+			testProvider.Delete(testClusterName, "")
 			return
 		}
 		tmpFile.Close()
-		k8sClientTestKubeconfigPath = tmpFile.Name()
-
-		// Register cleanup to run when program exits
-		// Note: This will run when the test binary exits, not after each test
-		go func() {
-			// Wait for tests to complete - this is a best-effort cleanup
-			// The cluster will be cleaned up when the process exits
-		}()
+		testKubeconfigPath = tmpFile.Name()
 	})
 
 	if setupErr != nil {
-		t.Fatalf("Failed to set up k8s_client test cluster: %v", setupErr)
+		t.Fatalf("Failed to set up k8s client test cluster: %v", setupErr)
 	}
 
-	if k8sClientTestKubeconfigPath == "" {
-		t.Fatal("Failed to set up k8s_client test cluster: kubeconfig path is empty")
+	if testKubeconfigPath == "" {
+		t.Fatal("Failed to set up k8s client test cluster: kubeconfig path is empty")
 	}
 }
 
 // verifyClusterConnectivity ensures we're connected to a real Kubernetes cluster
-func verifyClusterConnectivity(t *testing.T, client *K8sClient) {
+func verifyClusterConnectivity(t *testing.T, client *Client) {
 	t.Helper()
 	ctx := context.Background()
 	_, err := client.List(ctx, "namespaces", "")
@@ -106,10 +119,37 @@ func verifyClusterConnectivity(t *testing.T, client *K8sClient) {
 	}
 }
 
-func TestK8sClient_Get(t *testing.T) {
-	setupK8sClientTestCluster(t)
+func setupTestNamespace(t *testing.T, client *Client) string {
+	t.Helper()
+	ns := fmt.Sprintf("test-ns-%d", time.Now().UnixNano())
+	nsObj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": ns,
+			},
+		},
+	}
 
-	client, err := NewK8sClient(k8sClientTestKubeconfigPath)
+	_, err := client.Create(context.Background(), "namespaces", "", nsObj)
+	if err != nil {
+		t.Fatalf("Failed to create test namespace %s: %v", ns, err)
+	}
+	return ns
+}
+
+func cleanupTestNamespace(t *testing.T, client *Client, ns string) {
+	err := client.Delete(context.Background(), "namespaces", "", ns)
+	if err != nil {
+		t.Logf("Failed to cleanup test namespace %s: %v", ns, err)
+	}
+}
+
+func TestClient_Get(t *testing.T) {
+	setupTestCluster(t)
+
+	client, err := NewClient(testKubeconfigPath)
 	if err != nil {
 		t.Fatalf("Failed to create K8s client: %v", err)
 	}
@@ -185,10 +225,10 @@ func TestK8sClient_Get(t *testing.T) {
 	client.Delete(ctx, "configmaps", ns, cmName)
 }
 
-func TestK8sClient_List(t *testing.T) {
-	setupK8sClientTestCluster(t)
+func TestClient_List(t *testing.T) {
+	setupTestCluster(t)
 
-	client, err := NewK8sClient(k8sClientTestKubeconfigPath)
+	client, err := NewClient(testKubeconfigPath)
 	if err != nil {
 		t.Fatalf("Failed to create K8s client: %v", err)
 	}
@@ -284,10 +324,10 @@ func TestK8sClient_List(t *testing.T) {
 	})
 }
 
-func TestK8sClient_Create(t *testing.T) {
-	setupK8sClientTestCluster(t)
+func TestClient_Create(t *testing.T) {
+	setupTestCluster(t)
 
-	client, err := NewK8sClient(k8sClientTestKubeconfigPath)
+	client, err := NewClient(testKubeconfigPath)
 	if err != nil {
 		t.Fatalf("Failed to create K8s client: %v", err)
 	}
@@ -427,10 +467,10 @@ func TestK8sClient_Create(t *testing.T) {
 	})
 }
 
-func TestK8sClient_Update(t *testing.T) {
-	setupK8sClientTestCluster(t)
+func TestClient_Update(t *testing.T) {
+	setupTestCluster(t)
 
-	client, err := NewK8sClient(k8sClientTestKubeconfigPath)
+	client, err := NewClient(testKubeconfigPath)
 	if err != nil {
 		t.Fatalf("Failed to create K8s client: %v", err)
 	}
@@ -524,10 +564,10 @@ func TestK8sClient_Update(t *testing.T) {
 	})
 }
 
-func TestK8sClient_Patch(t *testing.T) {
-	setupK8sClientTestCluster(t)
+func TestClient_Patch(t *testing.T) {
+	setupTestCluster(t)
 
-	client, err := NewK8sClient(k8sClientTestKubeconfigPath)
+	client, err := NewClient(testKubeconfigPath)
 	if err != nil {
 		t.Fatalf("Failed to create K8s client: %v", err)
 	}
@@ -608,10 +648,10 @@ func TestK8sClient_Patch(t *testing.T) {
 	})
 }
 
-func TestK8sClient_Delete(t *testing.T) {
-	setupK8sClientTestCluster(t)
+func TestClient_Delete(t *testing.T) {
+	setupTestCluster(t)
 
-	client, err := NewK8sClient(k8sClientTestKubeconfigPath)
+	client, err := NewClient(testKubeconfigPath)
 	if err != nil {
 		t.Fatalf("Failed to create K8s client: %v", err)
 	}
@@ -678,10 +718,10 @@ func TestK8sClient_Delete(t *testing.T) {
 	})
 }
 
-func TestK8sClient_GetGVR(t *testing.T) {
-	setupK8sClientTestCluster(t)
+func TestClient_GetGVR(t *testing.T) {
+	setupTestCluster(t)
 
-	client, err := NewK8sClient(k8sClientTestKubeconfigPath)
+	client, err := NewClient(testKubeconfigPath)
 	if err != nil {
 		t.Fatalf("Failed to create K8s client: %v", err)
 	}
@@ -727,11 +767,11 @@ func TestK8sClient_GetGVR(t *testing.T) {
 	}
 }
 
-func TestK8sClient_NewK8sClient(t *testing.T) {
-	setupK8sClientTestCluster(t)
+func TestClient_NewClient(t *testing.T) {
+	setupTestCluster(t)
 
 	t.Run("Create client with kubeconfig path", func(t *testing.T) {
-		client, err := NewK8sClient(k8sClientTestKubeconfigPath)
+		client, err := NewClient(testKubeconfigPath)
 		if err != nil {
 			t.Fatalf("Failed to create K8s client: %v", err)
 		}
@@ -753,7 +793,7 @@ func TestK8sClient_NewK8sClient(t *testing.T) {
 		// Since we're not in a cluster, it should use the default kubeconfig
 		// But we can't reliably test this without mocking, so we'll skip
 		// or test that it fails gracefully
-		client, err := NewK8sClient("")
+		client, err := NewClient("")
 		if err != nil {
 			// This is expected if not in-cluster and no default kubeconfig
 			// We'll just verify it doesn't panic
@@ -771,10 +811,10 @@ func TestK8sClient_NewK8sClient(t *testing.T) {
 	})
 }
 
-func TestK8sClient_Deployment(t *testing.T) {
-	setupK8sClientTestCluster(t)
+func TestClient_Deployment(t *testing.T) {
+	setupTestCluster(t)
 
-	client, err := NewK8sClient(k8sClientTestKubeconfigPath)
+	client, err := NewClient(testKubeconfigPath)
 	if err != nil {
 		t.Fatalf("Failed to create K8s client: %v", err)
 	}
@@ -867,10 +907,10 @@ func TestK8sClient_Deployment(t *testing.T) {
 	})
 }
 
-func TestK8sClient_Secret(t *testing.T) {
-	setupK8sClientTestCluster(t)
+func TestClient_Secret(t *testing.T) {
+	setupTestCluster(t)
 
-	client, err := NewK8sClient(k8sClientTestKubeconfigPath)
+	client, err := NewClient(testKubeconfigPath)
 	if err != nil {
 		t.Fatalf("Failed to create K8s client: %v", err)
 	}
