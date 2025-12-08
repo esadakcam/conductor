@@ -41,6 +41,33 @@ type DeleteRequest struct {
 	Epoch int64 `json:"epoch"`
 }
 
+// ExecDeploymentRequest wraps the exec deployment payload
+type ExecDeploymentRequest struct {
+	Epoch     int64    `json:"epoch"`
+	Container string   `json:"container,omitempty"` // Optional: if empty, uses first container
+	Command   []string `json:"command"`             // Command to execute
+}
+
+// ExecDeploymentResponse contains the results of exec on all pods
+type ExecDeploymentResponse struct {
+	DeploymentName string              `json:"deploymentName"`
+	Namespace      string              `json:"namespace"`
+	Results        []PodExecResultJSON `json:"results"`
+}
+
+// PodExecResultJSON is the JSON-serializable version of k8s.PodExecResult
+type PodExecResultJSON struct {
+	PodName string          `json:"podName"`
+	Result  *ExecResultJSON `json:"result,omitempty"`
+	Error   string          `json:"error,omitempty"`
+}
+
+// ExecResultJSON is the JSON-serializable version of k8s.ExecResult
+type ExecResultJSON struct {
+	Stdout string `json:"stdout"`
+	Stderr string `json:"stderr"`
+}
+
 // ErrorResponse defines the standard error format
 type ErrorResponse struct {
 	Error string `json:"error"`
