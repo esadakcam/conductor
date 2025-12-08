@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -963,6 +964,438 @@ func TestClient_Secret(t *testing.T) {
 		err = client.Delete(ctx, "secrets", ns, secretName)
 		if err != nil {
 			t.Fatalf("Failed to delete Secret: %v", err)
+		}
+	})
+}
+
+// waitForPodRunning waits for a pod to be in the Running phase
+func waitForPodRunning(t *testing.T, client *Client, ns, podName string, timeout time.Duration) error {
+	t.Helper()
+	ctx := context.Background()
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		pod, err := client.Get(ctx, "pods", ns, podName)
+		if err != nil {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		phase, found, err := unstructured.NestedString(pod.Object, "status", "phase")
+		if err != nil || !found {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		if phase == "Running" {
+			// Also check that containers are ready
+			containerStatuses, found, _ := unstructured.NestedSlice(pod.Object, "status", "containerStatuses")
+			if found && len(containerStatuses) > 0 {
+				status := containerStatuses[0].(map[string]interface{})
+				ready, _, _ := unstructured.NestedBool(status, "ready")
+				if ready {
+					return nil
+				}
+			}
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return fmt.Errorf("timeout waiting for pod %s to be running", podName)
+}
+
+func TestClient_Exec(t *testing.T) {
+	setupTestCluster(t)
+
+	client, err := NewClient(testKubeconfigPath)
+	if err != nil {
+		t.Fatalf("Failed to create K8s client: %v", err)
+	}
+
+	// Verify we're connected to a real cluster
+	verifyClusterConnectivity(t, client)
+
+	ctx := context.Background()
+	ns := setupTestNamespace(t, client)
+	defer cleanupTestNamespace(t, client, ns)
+
+	// Create a pod for exec tests - using busybox with sleep to keep it running
+	podName := fmt.Sprintf("test-exec-pod-%d", time.Now().UnixNano())
+	podObj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata": map[string]interface{}{
+				"name":      podName,
+				"namespace": ns,
+			},
+			"spec": map[string]interface{}{
+				"containers": []map[string]interface{}{
+					{
+						"name":    "busybox",
+						"image":   "busybox:latest",
+						"command": []interface{}{"sleep", "3600"},
+					},
+				},
+			},
+		},
+	}
+
+	_, err = client.Create(ctx, "pods", ns, podObj)
+	if err != nil {
+		t.Fatalf("Failed to create test pod: %v", err)
+	}
+	defer client.Delete(ctx, "pods", ns, podName)
+
+	// Wait for the pod to be running
+	err = waitForPodRunning(t, client, ns, podName, 2*time.Minute)
+	if err != nil {
+		t.Fatalf("Pod did not become ready: %v", err)
+	}
+
+	t.Run("Exec simple command", func(t *testing.T) {
+		result, err := client.Exec(ctx, ns, podName, "busybox", []string{"echo", "hello"})
+		if err != nil {
+			t.Fatalf("Exec failed: %v", err)
+		}
+
+		expected := "hello\n"
+		if result.Stdout != expected {
+			t.Errorf("Expected stdout %q, got %q", expected, result.Stdout)
+		}
+
+		if result.Stderr != "" {
+			t.Errorf("Expected empty stderr, got %q", result.Stderr)
+		}
+	})
+
+	t.Run("Exec command with arguments", func(t *testing.T) {
+		result, err := client.Exec(ctx, ns, podName, "busybox", []string{"ls", "-la", "/"})
+		if err != nil {
+			t.Fatalf("Exec failed: %v", err)
+		}
+
+		if result.Stdout == "" {
+			t.Error("Expected non-empty stdout for ls command")
+		}
+
+		// Check for common root directory entries
+		if !strings.Contains(result.Stdout, "bin") {
+			t.Error("Expected stdout to contain 'bin' directory")
+		}
+	})
+
+	t.Run("Exec command with empty container name", func(t *testing.T) {
+		// Empty container name should use the first container
+		result, err := client.Exec(ctx, ns, podName, "", []string{"echo", "test"})
+		if err != nil {
+			t.Fatalf("Exec with empty container failed: %v", err)
+		}
+
+		expected := "test\n"
+		if result.Stdout != expected {
+			t.Errorf("Expected stdout %q, got %q", expected, result.Stdout)
+		}
+	})
+
+	t.Run("Exec command that writes to stderr", func(t *testing.T) {
+		result, err := client.Exec(ctx, ns, podName, "busybox", []string{"sh", "-c", "echo error >&2"})
+		if err != nil {
+			t.Fatalf("Exec failed: %v", err)
+		}
+
+		expected := "error\n"
+		if result.Stderr != expected {
+			t.Errorf("Expected stderr %q, got %q", expected, result.Stderr)
+		}
+	})
+
+	t.Run("Exec command that fails", func(t *testing.T) {
+		result, err := client.Exec(ctx, ns, podName, "busybox", []string{"ls", "/nonexistent-directory"})
+		if err == nil {
+			t.Error("Expected error for command that fails")
+		}
+
+		// Result should still be returned with stderr
+		if result == nil {
+			t.Fatal("Expected result to be returned even on error")
+		}
+
+		if result.Stderr == "" {
+			t.Error("Expected stderr to contain error message")
+		}
+	})
+
+	t.Run("Exec command with non-zero exit code", func(t *testing.T) {
+		// Use sh -c "exit 42" to explicitly return non-zero exit code
+		result, err := client.Exec(ctx, ns, podName, "busybox", []string{"sh", "-c", "echo 'output before exit' && exit 42"})
+		if err == nil {
+			t.Error("Expected error for non-zero exit code")
+		}
+
+		// Result should still be returned with stdout captured before exit
+		if result == nil {
+			t.Fatal("Expected result to be returned even on error")
+		}
+
+		if !strings.Contains(result.Stdout, "output before exit") {
+			t.Errorf("Expected stdout to contain 'output before exit', got %q", result.Stdout)
+		}
+	})
+
+	t.Run("Exec on non-existent pod", func(t *testing.T) {
+		_, err := client.Exec(ctx, ns, "non-existent-pod", "", []string{"echo", "hello"})
+		if err == nil {
+			t.Error("Expected error for non-existent pod")
+		}
+	})
+
+	t.Run("Exec on non-existent container", func(t *testing.T) {
+		_, err := client.Exec(ctx, ns, podName, "non-existent-container", []string{"echo", "hello"})
+		if err == nil {
+			t.Error("Expected error for non-existent container")
+		}
+	})
+}
+
+// waitForDeploymentReady waits for a deployment to have all replicas ready
+func waitForDeploymentReady(t *testing.T, client *Client, ns, deploymentName string, timeout time.Duration) error {
+	t.Helper()
+	ctx := context.Background()
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		deployment, err := client.Get(ctx, "deployments", ns, deploymentName)
+		if err != nil {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		readyReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "readyReplicas")
+		replicas, _, _ := unstructured.NestedInt64(deployment.Object, "spec", "replicas")
+
+		if readyReplicas == replicas && replicas > 0 {
+			return nil
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return fmt.Errorf("timeout waiting for deployment %s to be ready", deploymentName)
+}
+
+func TestClient_ExecDeployment(t *testing.T) {
+	setupTestCluster(t)
+
+	client, err := NewClient(testKubeconfigPath)
+	if err != nil {
+		t.Fatalf("Failed to create K8s client: %v", err)
+	}
+
+	// Verify we're connected to a real cluster
+	verifyClusterConnectivity(t, client)
+
+	ctx := context.Background()
+	ns := setupTestNamespace(t, client)
+	defer cleanupTestNamespace(t, client, ns)
+
+	// Create a deployment with 2 replicas for testing
+	deployName := fmt.Sprintf("test-exec-deploy-%d", time.Now().UnixNano())
+	deployObj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      deployName,
+				"namespace": ns,
+			},
+			"spec": map[string]interface{}{
+				"replicas": int64(2),
+				"selector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"app": "exec-test",
+					},
+				},
+				"template": map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]interface{}{
+							"app": "exec-test",
+						},
+					},
+					"spec": map[string]interface{}{
+						"containers": []map[string]interface{}{
+							{
+								"name":    "busybox",
+								"image":   "busybox:latest",
+								"command": []interface{}{"sleep", "3600"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err = client.Create(ctx, "deployments", ns, deployObj)
+	if err != nil {
+		t.Fatalf("Failed to create deployment: %v", err)
+	}
+	defer client.Delete(ctx, "deployments", ns, deployName)
+
+	// Wait for deployment to be ready
+	err = waitForDeploymentReady(t, client, ns, deployName, 3*time.Minute)
+	if err != nil {
+		t.Fatalf("Deployment did not become ready: %v", err)
+	}
+
+	t.Run("ExecDeployment simple command", func(t *testing.T) {
+		results, err := client.ExecDeployment(ctx, ns, deployName, "busybox", []string{"echo", "hello"})
+		if err != nil {
+			t.Fatalf("ExecDeployment failed: %v", err)
+		}
+
+		if len(results) != 2 {
+			t.Errorf("Expected 2 results, got %d", len(results))
+		}
+
+		for _, r := range results {
+			if r.Error != nil {
+				t.Errorf("Pod %s exec failed: %v", r.PodName, r.Error)
+				continue
+			}
+
+			expected := "hello\n"
+			if r.Result.Stdout != expected {
+				t.Errorf("Pod %s: expected stdout %q, got %q", r.PodName, expected, r.Result.Stdout)
+			}
+		}
+	})
+
+	t.Run("ExecDeployment with empty container name", func(t *testing.T) {
+		results, err := client.ExecDeployment(ctx, ns, deployName, "", []string{"echo", "test"})
+		if err != nil {
+			t.Fatalf("ExecDeployment failed: %v", err)
+		}
+
+		if len(results) != 2 {
+			t.Errorf("Expected 2 results, got %d", len(results))
+		}
+
+		for _, r := range results {
+			if r.Error != nil {
+				t.Errorf("Pod %s exec failed: %v", r.PodName, r.Error)
+				continue
+			}
+
+			expected := "test\n"
+			if r.Result.Stdout != expected {
+				t.Errorf("Pod %s: expected stdout %q, got %q", r.PodName, expected, r.Result.Stdout)
+			}
+		}
+	})
+
+	t.Run("ExecDeployment returns results for all pods", func(t *testing.T) {
+		results, err := client.ExecDeployment(ctx, ns, deployName, "busybox", []string{"hostname"})
+		if err != nil {
+			t.Fatalf("ExecDeployment failed: %v", err)
+		}
+
+		if len(results) != 2 {
+			t.Errorf("Expected 2 results, got %d", len(results))
+		}
+
+		// Collect all pod names and hostnames
+		podNames := make(map[string]bool)
+		hostnames := make(map[string]bool)
+		for _, r := range results {
+			podNames[r.PodName] = true
+			if r.Error == nil && r.Result != nil {
+				hostnames[strings.TrimSpace(r.Result.Stdout)] = true
+			}
+		}
+
+		// Each pod should have a unique name
+		if len(podNames) != 2 {
+			t.Errorf("Expected 2 unique pod names, got %d", len(podNames))
+		}
+
+		// Each pod should report a different hostname (which is the pod name)
+		if len(hostnames) != 2 {
+			t.Errorf("Expected 2 unique hostnames, got %d", len(hostnames))
+		}
+	})
+
+	t.Run("ExecDeployment on non-existent deployment", func(t *testing.T) {
+		_, err := client.ExecDeployment(ctx, ns, "non-existent-deployment", "", []string{"echo", "hello"})
+		if err == nil {
+			t.Error("Expected error for non-existent deployment")
+		}
+	})
+
+	t.Run("ExecDeployment on non-existent container", func(t *testing.T) {
+		results, err := client.ExecDeployment(ctx, ns, deployName, "non-existent-container", []string{"echo", "hello"})
+		if err != nil {
+			t.Fatalf("ExecDeployment should not return error at deployment level: %v", err)
+		}
+
+		// All pod results should have errors
+		for _, r := range results {
+			if r.Error == nil {
+				t.Errorf("Pod %s: expected error for non-existent container", r.PodName)
+			}
+		}
+	})
+
+	t.Run("ExecDeployment command that fails", func(t *testing.T) {
+		results, err := client.ExecDeployment(ctx, ns, deployName, "busybox", []string{"ls", "/nonexistent-directory"})
+		if err != nil {
+			t.Fatalf("ExecDeployment should not return error at deployment level: %v", err)
+		}
+
+		if len(results) != 2 {
+			t.Errorf("Expected 2 results, got %d", len(results))
+		}
+
+		// All pod results should have errors since the command fails
+		for _, r := range results {
+			if r.Error == nil {
+				t.Errorf("Pod %s: expected error for failing command", r.PodName)
+			}
+
+			// Result should still be returned with stderr
+			if r.Result == nil {
+				t.Errorf("Pod %s: expected result to be returned even on error", r.PodName)
+				continue
+			}
+
+			if r.Result.Stderr == "" {
+				t.Errorf("Pod %s: expected stderr to contain error message", r.PodName)
+			}
+		}
+	})
+
+	t.Run("ExecDeployment command with non-zero exit code", func(t *testing.T) {
+		// Use sh -c "exit 1" to explicitly return non-zero exit code
+		results, err := client.ExecDeployment(ctx, ns, deployName, "busybox", []string{"sh", "-c", "echo 'before exit' && exit 1"})
+		if err != nil {
+			t.Fatalf("ExecDeployment should not return error at deployment level: %v", err)
+		}
+
+		for _, r := range results {
+			if r.Error == nil {
+				t.Errorf("Pod %s: expected error for non-zero exit code", r.PodName)
+			}
+
+			// Should still capture stdout before the exit
+			if r.Result == nil {
+				t.Errorf("Pod %s: expected result to be returned even on error", r.PodName)
+				continue
+			}
+
+			if !strings.Contains(r.Result.Stdout, "before exit") {
+				t.Errorf("Pod %s: expected stdout to contain 'before exit', got %q", r.PodName, r.Result.Stdout)
+			}
 		}
 	})
 }
