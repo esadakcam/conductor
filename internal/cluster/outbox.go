@@ -61,11 +61,12 @@ func (o *Outbox) IsTaskExecuting(ctx context.Context, taskName string) bool {
 
 func (o *Outbox) AddTask(toExecute task.Task) error {
 	o.mu.Lock()
-	val := o.executingTasks[toExecute.Name]
-	o.mu.Unlock()
-	if val {
+	if o.executingTasks[toExecute.Name] {
+		o.mu.Unlock()
 		return nil
 	}
+	o.executingTasks[toExecute.Name] = true
+	o.mu.Unlock()
 	item := OutboxItem{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
@@ -82,6 +83,9 @@ func (o *Outbox) AddTask(toExecute task.Task) error {
 	cmp := clientv3.Compare(clientv3.Value(o.epochKey), "=", fmt.Sprintf("%d", o.epoch))
 	_, err = o.client.Txn(o.ctx).If(cmp).Then(then...).Commit()
 	if err != nil {
+		o.mu.Lock()
+		o.executingTasks[toExecute.Name] = false
+		o.mu.Unlock()
 		logger.Errorf("failed to add task to outbox: %v", err)
 		return err
 	}
