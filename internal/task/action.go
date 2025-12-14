@@ -131,6 +131,8 @@ func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64, idem
 		namespace = "default"
 	}
 
+	logger.Infof("Executing k8s exec deployment %s/%s via %s: %v", namespace, a.Deployment, a.Member, a.Command)
+
 	// Build request payload
 	reqPayload := map[string]interface{}{
 		"epoch":   epoch,
@@ -232,6 +234,22 @@ func (a *ActionK8sRestartDeployment) GetType() ActionType {
 }
 
 func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+	if a.Deployment == "" {
+		err := fmt.Errorf("deployment name is required")
+		logger.Error("ActionK8sRestartDeployment: deployment name is required")
+		return err
+	}
+
+	if a.Member == "" {
+		err := fmt.Errorf("member is required")
+		logger.Error("ActionK8sRestartDeployment: member is required")
+		return err
+	}
+
+	namespace := a.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
 
 	patchData := map[string]interface{}{
 		"spec": map[string]interface{}{
@@ -245,11 +263,11 @@ func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, epoch int64, i
 		},
 	}
 
-	if err := patchResource(ctx, a.Member, "deployments", a.Namespace, a.Deployment, patchData, epoch); err != nil {
-		logger.Errorf("OnChangeDeploymentRestart: failed to restart deployment %s/%s via %s: %v", a.Namespace, a.Deployment, a.Member, err)
+	if err := patchResource(ctx, a.Member, "deployments", namespace, a.Deployment, patchData, epoch); err != nil {
+		logger.Errorf("OnChangeDeploymentRestart: failed to restart deployment %s/%s via %s: %v", namespace, a.Deployment, a.Member, err)
 		return fmt.Errorf("failed to restart deployment: %w", err)
 	}
 
-	logger.Infof("successfully restarted deployment %s/%s via %s", a.Namespace, a.Deployment, a.Member)
+	logger.Infof("successfully restarted deployment %s/%s via %s", namespace, a.Deployment, a.Member)
 	return nil
 }

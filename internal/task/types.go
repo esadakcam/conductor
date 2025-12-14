@@ -25,8 +25,9 @@ type Config struct {
 }
 
 type Task struct {
-	When Condition `yaml:"when"`
-	Then Action    `yaml:"then"`
+	Name string      `yaml:"name"`
+	When []Condition `yaml:"when"`
+	Then []Action    `yaml:"then"`
 }
 
 type Condition interface {

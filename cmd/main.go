@@ -11,6 +11,7 @@ import (
 	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/server"
 	"github.com/esadakcam/conductor/internal/utils"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 func main() {
@@ -43,8 +44,9 @@ func main() {
 	elector, etcdClient, err := cluster.NewLeaderElector(cluster.Config{
 		EtcdEndpoints: config.EtcdEndpoints,
 		Name:          config.Name,
-		LeaderFn: func(ctx context.Context, epoch int64) error {
-			cluster.Conduct(ctx, config.Tasks, epoch)
+		LeaderFn: func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error {
+			outbox := cluster.NewOutbox(ctx, epoch, epochKey, client, config.Tasks)
+			cluster.Conduct(ctx, config.Tasks, outbox)
 			logger.Info("Tasks are conducted")
 			<-ctx.Done() // Wait for leadership to be lost
 			return nil

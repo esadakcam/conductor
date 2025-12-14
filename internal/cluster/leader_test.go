@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/server/v3/embed"
 )
 
@@ -110,7 +111,7 @@ func TestNewLeaderElector_Validation(t *testing.T) {
 			config: Config{
 				EtcdEndpoints: []string{},
 				Name:          "test",
-				LeaderFn:      func(ctx context.Context, epoch int64) error { return nil },
+				LeaderFn:      func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error { return nil },
 			},
 			expectError: true,
 			errorMsg:    "etcd endpoints are required",
@@ -120,7 +121,7 @@ func TestNewLeaderElector_Validation(t *testing.T) {
 			config: Config{
 				EtcdEndpoints: []string{"http://localhost:2379"},
 				Name:          "",
-				LeaderFn:      func(ctx context.Context, epoch int64) error { return nil },
+				LeaderFn:      func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error { return nil },
 			},
 			expectError: true,
 			errorMsg:    "name is required",
@@ -162,7 +163,7 @@ func TestNewLeaderElector_Defaults(t *testing.T) {
 	cfg := Config{
 		EtcdEndpoints: endpoints,
 		Name:          "test",
-		LeaderFn:      func(ctx context.Context, epoch int64) error { return nil },
+		LeaderFn:      func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error { return nil },
 		// Don't set Prefix, EpochKey, LeaseTTL, or Backoff to test defaults
 	}
 
@@ -205,7 +206,7 @@ func TestNewLeaderElector_CustomValues(t *testing.T) {
 		EpochKey:      customEpochKey,
 		LeaseTTL:      customLeaseTTL,
 		Backoff:       customBackoff,
-		LeaderFn:      func(ctx context.Context, epoch int64) error { return nil },
+		LeaderFn:      func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error { return nil },
 	}
 
 	elector, client, err := NewLeaderElector(cfg)
@@ -241,7 +242,7 @@ func TestLeaderElector_Run_SingleElector(t *testing.T) {
 		Name:          "leader1",
 		LeaseTTL:      2, // Short TTL for faster tests
 		Backoff:       100 * time.Millisecond,
-		LeaderFn: func(ctx context.Context, epoch int64) error {
+		LeaderFn: func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error {
 			leaderCalled <- epoch
 			<-ctx.Done()
 			return ctx.Err()
@@ -300,7 +301,7 @@ func TestLeaderElector_Run_MultipleElectors(t *testing.T) {
 		Name:          "leader1",
 		LeaseTTL:      2,
 		Backoff:       100 * time.Millisecond,
-		LeaderFn: func(ctx context.Context, epoch int64) error {
+		LeaderFn: func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error {
 			leader1Called <- epoch
 			<-ctx.Done()
 			return ctx.Err()
@@ -312,7 +313,7 @@ func TestLeaderElector_Run_MultipleElectors(t *testing.T) {
 		Name:          "leader2",
 		LeaseTTL:      2,
 		Backoff:       100 * time.Millisecond,
-		LeaderFn: func(ctx context.Context, epoch int64) error {
+		LeaderFn: func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error {
 			leader2Called <- epoch
 			<-ctx.Done()
 			return ctx.Err()
@@ -407,7 +408,7 @@ func TestLeaderElector_Run_LeadershipLoss(t *testing.T) {
 		Name:          "leader1",
 		LeaseTTL:      1, // Very short TTL to trigger leadership loss
 		Backoff:       100 * time.Millisecond,
-		LeaderFn: func(ctx context.Context, epoch int64) error {
+		LeaderFn: func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error {
 			mu.Lock()
 			callCount++
 			mu.Unlock()
@@ -476,7 +477,7 @@ func TestLeaderElector_nextEpoch(t *testing.T) {
 		EtcdEndpoints: endpoints,
 		Name:          "test",
 		EpochKey:      "/test/epoch",
-		LeaderFn:      func(ctx context.Context, epoch int64) error { return nil },
+		LeaderFn:      func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error { return nil },
 	}
 
 	elector, client, err := NewLeaderElector(cfg)
@@ -528,7 +529,7 @@ func TestLeaderElector_nextEpoch_Concurrent(t *testing.T) {
 		EtcdEndpoints: endpoints,
 		Name:          "test",
 		EpochKey:      "/test/epoch-concurrent",
-		LeaderFn:      func(ctx context.Context, epoch int64) error { return nil },
+		LeaderFn:      func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error { return nil },
 	}
 
 	elector, client, err := NewLeaderElector(cfg)
@@ -542,7 +543,7 @@ func TestLeaderElector_nextEpoch_Concurrent(t *testing.T) {
 		EtcdEndpoints: endpoints,
 		Name:          "test2",
 		EpochKey:      "/test/epoch-concurrent",
-		LeaderFn:      func(ctx context.Context, epoch int64) error { return nil },
+		LeaderFn:      func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error { return nil },
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -605,7 +606,7 @@ func TestLeaderElector_Run_ContextCancellation(t *testing.T) {
 		Name:          "test",
 		LeaseTTL:      5,
 		Backoff:       100 * time.Millisecond,
-		LeaderFn: func(ctx context.Context, epoch int64) error {
+		LeaderFn: func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error {
 			leaderCalled <- struct{}{}
 			<-ctx.Done()
 			return ctx.Err()
@@ -657,7 +658,7 @@ func TestLeaderElector_Run_LeaderFunctionError(t *testing.T) {
 		Name:          "test",
 		LeaseTTL:      2,
 		Backoff:       100 * time.Millisecond,
-		LeaderFn: func(ctx context.Context, epoch int64) error {
+		LeaderFn: func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error {
 			return testErr
 		},
 	}

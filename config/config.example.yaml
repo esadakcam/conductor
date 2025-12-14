@@ -87,6 +87,7 @@ tasks:
   #     selector: "open5gs"
   #     value: 1
       
+  # - name: nginx-data value sum accross members is 10
   # - when:
   #     type: "always_true"
   #   then:
@@ -103,10 +104,16 @@ tasks:
   #       - type: "deployment_restart" 
   #         deployment: "nginx"
 
-  - when:
-      type: "always_true"
+
+  - name: Execute ls in ngnix
+    when:
+      - type: "always_true"
     then:
-      type: "k8s_exec_deployment"
-      member: "http://localhost:8080"
-      deployment: "nginx"
-      command: ["ls", "/"]
+      - type: "k8s_exec_deployment"
+        member: "http://localhost:8080"
+        deployment: "nginx"
+        command: ["ls", "/"]
+      - type: "k8s_exec_deployment"
+        member: "http://localhost:8080"
+        deployment: "nginx"
+        command: ["ls", "/etc"]

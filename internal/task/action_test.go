@@ -1120,7 +1120,7 @@ func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 			epoch:         1,
 			serverHandler: nil,
 			expectedError: true,
-			errorContains: "failed to restart deployment",
+			errorContains: "member is required",
 		},
 		{
 			name: "patch failure returns error",
