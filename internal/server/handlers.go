@@ -381,6 +381,9 @@ func (h *Handler) validateEpoch(w http.ResponseWriter, ctx context.Context, epoc
 }
 
 func (h *Handler) storeIdempotencyKey(ctx context.Context, idempotencyId string, epoch int64) {
+	if h.etcdClient == nil {
+		return
+	}
 	key := fmt.Sprintf("%s/%s/%s", DefaultIdempotencyKeyPrefix, h.memberName, idempotencyId)
 	_, err := h.etcdClient.Put(ctx, key, fmt.Sprintf("%d", epoch))
 	if err != nil {

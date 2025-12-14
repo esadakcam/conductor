@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/logger"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/kind/pkg/cluster"
 )
 
@@ -28,6 +30,66 @@ func (m *MockValidator) Validate(ctx context.Context, toValidate any) (bool, err
 		return m.ValidateFunc(ctx, toValidate)
 	}
 	return true, nil
+}
+
+// MockKubernetesClient satisfies KubernetesClient interface for unit tests
+type MockKubernetesClient struct {
+	GetFunc            func(ctx context.Context, resource, namespace, name string) (*unstructured.Unstructured, error)
+	ListFunc           func(ctx context.Context, resource, namespace string) (*unstructured.UnstructuredList, error)
+	CreateFunc         func(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error)
+	UpdateFunc         func(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error)
+	PatchFunc          func(ctx context.Context, resource, namespace, name string, pt types.PatchType, data []byte) (*unstructured.Unstructured, error)
+	DeleteFunc         func(ctx context.Context, resource, namespace, name string) error
+	ExecDeploymentFunc func(ctx context.Context, namespace, deploymentName, container string, command []string) ([]k8s.PodExecResult, error)
+}
+
+func (m *MockKubernetesClient) Get(ctx context.Context, resource, namespace, name string) (*unstructured.Unstructured, error) {
+	if m.GetFunc != nil {
+		return m.GetFunc(ctx, resource, namespace, name)
+	}
+	return &unstructured.Unstructured{}, nil
+}
+
+func (m *MockKubernetesClient) List(ctx context.Context, resource, namespace string) (*unstructured.UnstructuredList, error) {
+	if m.ListFunc != nil {
+		return m.ListFunc(ctx, resource, namespace)
+	}
+	return &unstructured.UnstructuredList{}, nil
+}
+
+func (m *MockKubernetesClient) Create(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	if m.CreateFunc != nil {
+		return m.CreateFunc(ctx, resource, namespace, obj)
+	}
+	return obj, nil
+}
+
+func (m *MockKubernetesClient) Update(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	if m.UpdateFunc != nil {
+		return m.UpdateFunc(ctx, resource, namespace, obj)
+	}
+	return obj, nil
+}
+
+func (m *MockKubernetesClient) Patch(ctx context.Context, resource, namespace, name string, pt types.PatchType, data []byte) (*unstructured.Unstructured, error) {
+	if m.PatchFunc != nil {
+		return m.PatchFunc(ctx, resource, namespace, name, pt, data)
+	}
+	return &unstructured.Unstructured{}, nil
+}
+
+func (m *MockKubernetesClient) Delete(ctx context.Context, resource, namespace, name string) error {
+	if m.DeleteFunc != nil {
+		return m.DeleteFunc(ctx, resource, namespace, name)
+	}
+	return nil
+}
+
+func (m *MockKubernetesClient) ExecDeployment(ctx context.Context, namespace, deploymentName, container string, command []string) ([]k8s.PodExecResult, error) {
+	if m.ExecDeploymentFunc != nil {
+		return m.ExecDeploymentFunc(ctx, namespace, deploymentName, container, command)
+	}
+	return []k8s.PodExecResult{}, nil
 }
 
 var (
@@ -801,6 +863,525 @@ func TestIntegrationHandlers(t *testing.T) {
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
+		}
+	})
+}
+
+// TestIdempotency contains unit tests for idempotency validation
+// These tests don't require a real K8s cluster
+func TestIdempotency(t *testing.T) {
+	mockK8sClient := &MockKubernetesClient{}
+
+	t.Run("HandleCreate_MissingIdempotencyId", func(t *testing.T) {
+		mockValidator := &MockValidator{}
+		h := NewHandler(mockK8sClient, mockValidator, mockValidator, nil, "")
+
+		body := CreateRequest{
+			Epoch: 1,
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata":   map[string]interface{}{"name": "test"},
+			},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/configmaps/default", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		// No X-Idempotency-Id header
+		w := httptest.NewRecorder()
+
+		h.HandleCreate(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "idempotency id is required" {
+			t.Errorf("Expected error 'idempotency id is required', got '%s'", errResp.Error)
+		}
+	})
+
+	t.Run("HandleCreate_IdempotencyAlreadyProcessed", func(t *testing.T) {
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return false, nil // Already processed
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := CreateRequest{
+			Epoch: 1,
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata":   map[string]interface{}{"name": "test"},
+			},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/configmaps/default", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.Header.Set("X-Idempotency-Id", "already-processed-id")
+		w := httptest.NewRecorder()
+
+		h.HandleCreate(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Errorf("Expected status %d, got %d", http.StatusNoContent, w.Code)
+		}
+	})
+
+	t.Run("HandleCreate_IdempotencyValidationError", func(t *testing.T) {
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return false, errors.New("etcd connection failed")
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := CreateRequest{
+			Epoch: 1,
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata":   map[string]interface{}{"name": "test"},
+			},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/configmaps/default", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.Header.Set("X-Idempotency-Id", "test-id")
+		w := httptest.NewRecorder()
+
+		h.HandleCreate(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "idempotency validation failed" {
+			t.Errorf("Expected error 'idempotency validation failed', got '%s'", errResp.Error)
+		}
+	})
+
+	t.Run("HandleUpdate_MissingIdempotencyId", func(t *testing.T) {
+		mockValidator := &MockValidator{}
+		h := NewHandler(mockK8sClient, mockValidator, mockValidator, nil, "")
+
+		body := UpdateRequest{
+			Epoch: 1,
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata":   map[string]interface{}{"name": "test"},
+			},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PUT", "/api/v1/configmaps/default/test", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test")
+		// No X-Idempotency-Id header
+		w := httptest.NewRecorder()
+
+		h.HandleUpdate(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "idempotency id is required" {
+			t.Errorf("Expected error 'idempotency id is required', got '%s'", errResp.Error)
+		}
+	})
+
+	t.Run("HandleUpdate_IdempotencyAlreadyProcessed", func(t *testing.T) {
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return false, nil // Already processed
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := UpdateRequest{
+			Epoch: 1,
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata":   map[string]interface{}{"name": "test"},
+			},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PUT", "/api/v1/configmaps/default/test", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test")
+		req.Header.Set("X-Idempotency-Id", "already-processed-id")
+		w := httptest.NewRecorder()
+
+		h.HandleUpdate(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Errorf("Expected status %d, got %d", http.StatusNoContent, w.Code)
+		}
+	})
+
+	t.Run("HandlePatch_MissingIdempotencyId", func(t *testing.T) {
+		mockValidator := &MockValidator{}
+		h := NewHandler(mockK8sClient, mockValidator, mockValidator, nil, "")
+
+		body := map[string]interface{}{
+			"epoch": 1,
+			"patch": map[string]interface{}{"data": map[string]interface{}{"key": "value"}},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/configmaps/default/test", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test")
+		// No X-Idempotency-Id header
+		w := httptest.NewRecorder()
+
+		h.HandlePatch(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "idempotency id is required" {
+			t.Errorf("Expected error 'idempotency id is required', got '%s'", errResp.Error)
+		}
+	})
+
+	t.Run("HandlePatch_IdempotencyAlreadyProcessed", func(t *testing.T) {
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return false, nil // Already processed
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := map[string]interface{}{
+			"epoch": 1,
+			"patch": map[string]interface{}{"data": map[string]interface{}{"key": "value"}},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/configmaps/default/test", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test")
+		req.Header.Set("X-Idempotency-Id", "already-processed-id")
+		w := httptest.NewRecorder()
+
+		h.HandlePatch(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Errorf("Expected status %d, got %d", http.StatusNoContent, w.Code)
+		}
+	})
+
+	t.Run("HandleDelete_MissingIdempotencyId", func(t *testing.T) {
+		mockValidator := &MockValidator{}
+		h := NewHandler(mockK8sClient, mockValidator, mockValidator, nil, "")
+
+		body := DeleteRequest{Epoch: 1}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("DELETE", "/api/v1/configmaps/default/test", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test")
+		// No X-Idempotency-Id header
+		w := httptest.NewRecorder()
+
+		h.HandleDelete(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "idempotency id is required" {
+			t.Errorf("Expected error 'idempotency id is required', got '%s'", errResp.Error)
+		}
+	})
+
+	t.Run("HandleDelete_IdempotencyAlreadyProcessed", func(t *testing.T) {
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return false, nil // Already processed
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := DeleteRequest{Epoch: 1}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("DELETE", "/api/v1/configmaps/default/test", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test")
+		req.Header.Set("X-Idempotency-Id", "already-processed-id")
+		w := httptest.NewRecorder()
+
+		h.HandleDelete(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Errorf("Expected status %d, got %d", http.StatusNoContent, w.Code)
+		}
+	})
+
+	t.Run("HandleExecDeployment_MissingIdempotencyId", func(t *testing.T) {
+		mockValidator := &MockValidator{}
+		h := NewHandler(mockK8sClient, mockValidator, mockValidator, nil, "")
+
+		body := ExecDeploymentRequest{
+			Epoch:   1,
+			Command: []string{"echo", "test"},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/default/test-deploy", bytes.NewReader(bodyBytes))
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test-deploy")
+		// No X-Idempotency-Id header
+		w := httptest.NewRecorder()
+
+		h.HandleExecDeployment(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "idempotency id is required" {
+			t.Errorf("Expected error 'idempotency id is required', got '%s'", errResp.Error)
+		}
+	})
+
+	t.Run("HandleExecDeployment_IdempotencyAlreadyProcessed", func(t *testing.T) {
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return false, nil // Already processed
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := ExecDeploymentRequest{
+			Epoch:   1,
+			Command: []string{"echo", "test"},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/default/test-deploy", bytes.NewReader(bodyBytes))
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test-deploy")
+		req.Header.Set("X-Idempotency-Id", "already-processed-id")
+		w := httptest.NewRecorder()
+
+		h.HandleExecDeployment(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Errorf("Expected status %d, got %d", http.StatusNoContent, w.Code)
+		}
+	})
+
+	t.Run("HandleExecDeployment_IdempotencyValidationError", func(t *testing.T) {
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return false, errors.New("etcd connection failed")
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := ExecDeploymentRequest{
+			Epoch:   1,
+			Command: []string{"echo", "test"},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/default/test-deploy", bytes.NewReader(bodyBytes))
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test-deploy")
+		req.Header.Set("X-Idempotency-Id", "test-id")
+		w := httptest.NewRecorder()
+
+		h.HandleExecDeployment(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "idempotency validation failed" {
+			t.Errorf("Expected error 'idempotency validation failed', got '%s'", errResp.Error)
+		}
+	})
+
+	t.Run("HandleCreate_IdempotencyValidatorReceivesCorrectId", func(t *testing.T) {
+		var receivedIdempotencyId any
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				receivedIdempotencyId = toValidate
+				return true, nil
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := CreateRequest{
+			Epoch: 1,
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata":   map[string]interface{}{"name": "test"},
+			},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/configmaps/default", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.Header.Set("X-Idempotency-Id", "unique-request-id-123")
+		w := httptest.NewRecorder()
+
+		h.HandleCreate(w, req)
+
+		if receivedIdempotencyId != "unique-request-id-123" {
+			t.Errorf("Expected idempotency validator to receive 'unique-request-id-123', got '%v'", receivedIdempotencyId)
+		}
+	})
+
+	t.Run("HandleUpdate_IdempotencyValidationError", func(t *testing.T) {
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return false, errors.New("storage unavailable")
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := UpdateRequest{
+			Epoch: 1,
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata":   map[string]interface{}{"name": "test"},
+			},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PUT", "/api/v1/configmaps/default/test", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test")
+		req.Header.Set("X-Idempotency-Id", "test-id")
+		w := httptest.NewRecorder()
+
+		h.HandleUpdate(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "idempotency validation failed" {
+			t.Errorf("Expected error 'idempotency validation failed', got '%s'", errResp.Error)
+		}
+	})
+
+	t.Run("HandlePatch_IdempotencyValidationError", func(t *testing.T) {
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return false, errors.New("storage unavailable")
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := map[string]interface{}{
+			"epoch": 1,
+			"patch": map[string]interface{}{"data": map[string]interface{}{"key": "value"}},
+		}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/configmaps/default/test", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test")
+		req.Header.Set("X-Idempotency-Id", "test-id")
+		w := httptest.NewRecorder()
+
+		h.HandlePatch(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "idempotency validation failed" {
+			t.Errorf("Expected error 'idempotency validation failed', got '%s'", errResp.Error)
+		}
+	})
+
+	t.Run("HandleDelete_IdempotencyValidationError", func(t *testing.T) {
+		epochValidator := &MockValidator{}
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return false, errors.New("storage unavailable")
+			},
+		}
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+
+		body := DeleteRequest{Epoch: 1}
+		bodyBytes, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("DELETE", "/api/v1/configmaps/default/test", bytes.NewReader(bodyBytes))
+		req.SetPathValue("resource", "configmaps")
+		req.SetPathValue("namespace", "default")
+		req.SetPathValue("name", "test")
+		req.Header.Set("X-Idempotency-Id", "test-id")
+		w := httptest.NewRecorder()
+
+		h.HandleDelete(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
+		}
+
+		var errResp ErrorResponse
+		json.Unmarshal(w.Body.Bytes(), &errResp)
+		if errResp.Error != "idempotency validation failed" {
+			t.Errorf("Expected error 'idempotency validation failed', got '%s'", errResp.Error)
 		}
 	})
 }
