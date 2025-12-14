@@ -3,13 +3,14 @@ package task
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestActionEndpoint_Execute(t *testing.T) {
@@ -266,7 +267,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 				tt.action.Endpoint = server.URL
 			}
 
-			err := tt.action.Execute(context.Background(), 0)
+			err := tt.action.Execute(context.Background(), 0, uuid.New().String())
 
 			if tt.expectedError {
 				if err == nil {
@@ -287,7 +288,7 @@ func TestActionEndpoint_Execute_InvalidEndpoint(t *testing.T) {
 		Method:   "GET",
 	}
 
-	err := action.Execute(context.Background(), 0)
+	err := action.Execute(context.Background(), 0, uuid.New().String())
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -327,7 +328,7 @@ func TestActionEndpoint_Execute_HTTPStatusCodes(t *testing.T) {
 				Method:   "GET",
 			}
 
-			err := action.Execute(context.Background(), 0)
+			err := action.Execute(context.Background(), 0, uuid.New().String())
 
 			if tc.expectedError {
 				if err == nil {
@@ -340,32 +341,6 @@ func TestActionEndpoint_Execute_HTTPStatusCodes(t *testing.T) {
 			}
 		})
 	}
-}
-
-// mockOnChange is a test implementation of OnChange interface
-type mockOnChange struct {
-	mu           sync.Mutex
-	executed     bool
-	executedFor  []string
-	executeError error
-	executeCalls int
-	namespace    string
-	epoch        int64
-}
-
-func (m *mockOnChange) GetType() OnChangeType {
-	return OnChangeTypeDeploymentRestart
-}
-
-func (m *mockOnChange) Execute(ctx context.Context, member string, namespace string, epoch int64) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.executed = true
-	m.executedFor = append(m.executedFor, member)
-	m.executeCalls++
-	m.namespace = namespace
-	m.epoch = epoch
-	return m.executeError
 }
 
 func TestActionConfigValueSum_Execute(t *testing.T) {
@@ -519,111 +494,6 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 				return servers, cleanup
 			},
 			expectedError: false,
-		},
-		{
-			name: "onChange is executed when values change",
-			action: &ActionConfigValueSum{
-				ConfigMapName: "test-config",
-				Key:           "replicas",
-				Sum:           10,
-				Members:       []string{"member1", "member2"},
-			},
-			setupServers: func() (map[string]*httptest.Server, func()) {
-				servers := make(map[string]*httptest.Server)
-				// Member1 returns 3
-				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
-						response := map[string]interface{}{
-							"data": map[string]string{
-								"replicas": "3",
-							},
-						}
-						json.NewEncoder(w).Encode(response)
-					} else if r.Method == "PATCH" {
-						w.WriteHeader(http.StatusOK)
-					}
-				}))
-				// Member2 returns 3
-				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
-						response := map[string]interface{}{
-							"data": map[string]string{
-								"replicas": "3",
-							},
-						}
-						json.NewEncoder(w).Encode(response)
-					} else if r.Method == "PATCH" {
-						w.WriteHeader(http.StatusOK)
-					}
-				}))
-				cleanup := func() {
-					for _, s := range servers {
-						s.Close()
-					}
-				}
-				return servers, cleanup
-			},
-			expectedError: false,
-			validateFunc: func(t *testing.T, action *ActionConfigValueSum, servers map[string]*httptest.Server) {
-				mockOnChange, ok := action.OnChange.(*mockOnChange)
-				if !ok {
-					t.Fatalf("expected mockOnChange, got %T", action.OnChange)
-				}
-				if !mockOnChange.executed {
-					t.Error("expected onChange to be executed")
-				}
-				if mockOnChange.executeCalls != 2 {
-					t.Errorf("expected onChange to be called 2 times, got %d", mockOnChange.executeCalls)
-				}
-				if len(mockOnChange.executedFor) != 2 {
-					t.Errorf("expected onChange to be executed for 2 members, got %d", len(mockOnChange.executedFor))
-				}
-			},
-		},
-		{
-			name: "onChange execution failure returns error",
-			action: &ActionConfigValueSum{
-				ConfigMapName: "test-config",
-				Key:           "replicas",
-				Sum:           10,
-				Members:       []string{"member1", "member2"},
-			},
-			setupServers: func() (map[string]*httptest.Server, func()) {
-				servers := make(map[string]*httptest.Server)
-				// Member1 returns 3
-				servers["member1"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
-						response := map[string]interface{}{
-							"data": map[string]string{
-								"replicas": "3",
-							},
-						}
-						json.NewEncoder(w).Encode(response)
-					} else if r.Method == "PATCH" {
-						w.WriteHeader(http.StatusOK)
-					}
-				}))
-				// Member2 returns 3
-				servers["member2"] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/configmaps/default/test-config") {
-						response := map[string]interface{}{
-							"data": map[string]string{
-								"replicas": "3",
-							},
-						}
-						json.NewEncoder(w).Encode(response)
-					} else if r.Method == "PATCH" {
-						w.WriteHeader(http.StatusOK)
-					}
-				}))
-				cleanup := func() {
-					for _, s := range servers {
-						s.Close()
-					}
-				}
-				return servers, cleanup
-			},
-			expectedError: true,
 		},
 		{
 			name: "fetch config value failure",
@@ -854,16 +724,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 				}
 			}
 
-			// Set up mock onChange if needed
-			if strings.Contains(tt.name, "onChange") {
-				mock := &mockOnChange{}
-				if strings.Contains(tt.name, "failure") {
-					mock.executeError = fmt.Errorf("onChange execution failed")
-				}
-				tt.action.OnChange = mock
-			}
-
-			err := tt.action.Execute(context.Background(), 1)
+			err := tt.action.Execute(context.Background(), 1, uuid.New().String())
 
 			if tt.expectedError {
 				if err == nil {
@@ -889,10 +750,10 @@ func TestActionConfigValueSum_GetType(t *testing.T) {
 	}
 }
 
-func TestOnChangeDeploymentRestart_GetType(t *testing.T) {
-	onChange := &OnChangeDeploymentRestart{}
-	if onChange.GetType() != OnChangeTypeDeploymentRestart {
-		t.Errorf("expected GetType() to return OnChangeTypeDeploymentRestart, got %v", onChange.GetType())
+func TestActionK8sRestartDeployment_GetType(t *testing.T) {
+	action := &ActionK8sRestartDeployment{}
+	if action.GetType() != ActionTypeK8sRestartDeployment {
+		t.Errorf("expected GetType() to return ActionTypeK8sRestartDeployment, got %v", action.GetType())
 	}
 }
 
@@ -1137,7 +998,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			err := tt.action.Execute(context.Background(), tt.epoch)
+			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
 
 			if tt.expectedError {
 				if err == nil {
@@ -1161,114 +1022,153 @@ func TestActionK8sExecDeployment_Execute_InvalidEndpoint(t *testing.T) {
 		Command:    []string{"echo"},
 	}
 
-	err := action.Execute(context.Background(), 1)
+	err := action.Execute(context.Background(), 1, uuid.New().String())
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
 	}
 }
 
-func TestOnChangeDeploymentRestart_Execute(t *testing.T) {
+func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 	tests := []struct {
 		name          string
-		onChange      *OnChangeDeploymentRestart
-		setupServer   func() (*httptest.Server, func())
+		action        *ActionK8sRestartDeployment
+		epoch         int64
+		serverHandler http.HandlerFunc
 		expectedError bool
-		validateReq   func(*testing.T, *http.Request)
+		errorContains string
 	}{
 		{
-			name: "successful deployment restart",
-			onChange: &OnChangeDeploymentRestart{
+			name: "successful deployment restart with default namespace",
+			action: &ActionK8sRestartDeployment{
 				Deployment: "test-deployment",
 			},
-			setupServer: func() (*httptest.Server, func()) {
-				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Method != "PATCH" {
-						t.Errorf("expected PATCH method, got %s", r.Method)
-					}
-					expectedPath := "/api/v1/deployments/default/test-deployment"
-					if r.URL.Path != expectedPath {
-						t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
-					}
-					var body map[string]interface{}
-					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-						t.Errorf("failed to decode request body: %v", err)
-					}
-					if epoch, ok := body["epoch"].(float64); !ok || epoch != 1 {
-						t.Errorf("expected epoch 1, got %v", body["epoch"])
-					}
-					patch, ok := body["patch"].(map[string]interface{})
-					if !ok {
-						t.Errorf("expected patch in body")
-					}
-					spec, ok := patch["spec"].(map[string]interface{})
-					if !ok {
-						t.Errorf("expected spec in patch")
-					}
-					template, ok := spec["template"].(map[string]interface{})
-					if !ok {
-						t.Errorf("expected template in spec")
-					}
-					metadata, ok := template["metadata"].(map[string]interface{})
-					if !ok {
-						t.Errorf("expected metadata in template")
-					}
-					annotations, ok := metadata["annotations"].(map[string]interface{})
-					if !ok {
-						t.Errorf("expected annotations in metadata")
-					}
-					if _, ok := annotations["kubectl.kubernetes.io/restartedAt"]; !ok {
-						t.Errorf("expected restartedAt annotation")
-					}
-					w.WriteHeader(http.StatusOK)
-				}))
-				return server, server.Close
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "PATCH" {
+					t.Errorf("expected PATCH method, got %s", r.Method)
+				}
+				expectedPath := "/api/v1/deployments/default/test-deployment"
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("failed to decode request body: %v", err)
+				}
+				if epoch, ok := body["epoch"].(float64); !ok || epoch != 1 {
+					t.Errorf("expected epoch 1, got %v", body["epoch"])
+				}
+				patch, ok := body["patch"].(map[string]interface{})
+				if !ok {
+					t.Errorf("expected patch in body")
+				}
+				spec, ok := patch["spec"].(map[string]interface{})
+				if !ok {
+					t.Errorf("expected spec in patch")
+				}
+				template, ok := spec["template"].(map[string]interface{})
+				if !ok {
+					t.Errorf("expected template in spec")
+				}
+				metadata, ok := template["metadata"].(map[string]interface{})
+				if !ok {
+					t.Errorf("expected metadata in template")
+				}
+				annotations, ok := metadata["annotations"].(map[string]interface{})
+				if !ok {
+					t.Errorf("expected annotations in metadata")
+				}
+				if _, ok := annotations["kubectl.kubernetes.io/restartedAt"]; !ok {
+					t.Errorf("expected restartedAt annotation")
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful deployment restart with custom namespace",
+			action: &ActionK8sRestartDeployment{
+				Deployment: "test-deployment",
+				Namespace:  "custom-ns",
+			},
+			epoch: 123,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				expectedPath := "/api/v1/deployments/custom-ns/test-deployment"
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+				w.WriteHeader(http.StatusOK)
 			},
 			expectedError: false,
 		},
 		{
 			name: "missing deployment name returns error",
-			onChange: &OnChangeDeploymentRestart{
+			action: &ActionK8sRestartDeployment{
 				Deployment: "",
 			},
-			setupServer: func() (*httptest.Server, func()) {
-				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusOK)
-				}))
-				return server, server.Close
-			},
+			epoch:         1,
+			serverHandler: nil,
 			expectedError: true,
+			errorContains: "deployment name is required",
+		},
+		{
+			name: "missing member returns error",
+			action: &ActionK8sRestartDeployment{
+				Deployment: "test-deployment",
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "member is required",
 		},
 		{
 			name: "patch failure returns error",
-			onChange: &OnChangeDeploymentRestart{
+			action: &ActionK8sRestartDeployment{
 				Deployment: "test-deployment",
 			},
-			setupServer: func() (*httptest.Server, func()) {
-				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte("Internal Server Error"))
-				}))
-				return server, server.Close
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Internal Server Error"))
 			},
 			expectedError: true,
+			errorContains: "failed to restart deployment",
+		},
+		{
+			name: "HTTP 409 Conflict (stale epoch) returns error",
+			action: &ActionK8sRestartDeployment{
+				Deployment: "test-deployment",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "stale epoch",
+					"code":  409,
+				})
+			},
+			expectedError: true,
+			errorContains: "failed to restart deployment",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server, cleanup := tt.setupServer()
-			defer cleanup()
+			// Set up test server if handler is provided
+			if tt.serverHandler != nil {
+				server := httptest.NewServer(tt.serverHandler)
+				defer server.Close()
+				tt.action.Member = server.URL
+			}
 
-			// Create a context with member URL
-			ctx := context.Background()
-			member := server.URL
-
-			err := tt.onChange.Execute(ctx, member, "default", 1)
+			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
 
 			if tt.expectedError {
 				if err == nil {
 					t.Errorf("expected error but got none")
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("expected error containing %q, got %q", tt.errorContains, err.Error())
 				}
 			} else {
 				if err != nil {

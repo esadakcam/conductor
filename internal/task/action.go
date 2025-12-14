@@ -18,7 +18,7 @@ func (a *ActionEndpoint) GetType() ActionType {
 	return ActionTypeEndpoint
 }
 
-func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64) error {
+func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
 	if a.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
 		logger.Error("ActionEndpoint: endpoint is required")
@@ -48,6 +48,7 @@ func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64) error {
 	for key, value := range a.Headers {
 		req.Header.Set(key, value)
 	}
+	req.Header.Set("X-Idempotency-Id", idempotencyId)
 
 	// Set Content-Type header if body is provided and Content-Type is not already set
 	if a.Body != "" && req.Header.Get("Content-Type") == "" {
@@ -78,16 +79,30 @@ func (a *ActionEcho) GetType() ActionType {
 	return ActionTypeEcho
 }
 
-func (a *ActionEcho) Execute(ctx context.Context, epoch int64) error {
+func (a *ActionEcho) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
 	logger.Info(a.Message)
 	return nil
+}
+
+func (a *ActionDelay) GetType() ActionType {
+	return ActionTypeDelay
+}
+
+func (a *ActionDelay) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+	logger.Infof("ActionDelay: sleeping for %s", a.Time)
+	select {
+	case <-time.After(a.Time):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (a *ActionConfigValueSum) GetType() ActionType {
 	return ActionTypeConfigValueSum
 }
 
-func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64) error {
+func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
 	curSumMap := a.fetchCurrentValues(ctx)
 
 	curSum := 0
@@ -100,14 +115,14 @@ func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64) error {
 		return nil
 	}
 
-	return a.distributeAndApplyChanges(ctx, curSumMap, epoch)
+	return a.distributeAndApplyChanges(ctx, curSumMap, epoch, idempotencyId)
 }
 
 func (a *ActionK8sExecDeployment) GetType() ActionType {
 	return ActionTypeK8sExecDeployment
 }
 
-func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64) error {
+func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
 		logger.Error("ActionK8sExecDeployment: deployment name is required")
@@ -130,6 +145,8 @@ func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64) erro
 	if namespace == "" {
 		namespace = "default"
 	}
+
+	logger.Infof("Executing k8s exec deployment %s/%s via %s: %v", namespace, a.Deployment, a.Member, a.Command)
 
 	// Build request payload
 	reqPayload := map[string]interface{}{
@@ -154,6 +171,7 @@ func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64) erro
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Idempotency-Id", idempotencyId)
 
 	client := httpclient.Get()
 	resp, err := client.Do(req)
@@ -196,7 +214,7 @@ func (a *ActionConfigValueSum) fetchCurrentValues(ctx context.Context) map[strin
 	return curSumMap
 }
 
-func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, curSumMap map[string]int, epoch int64) error {
+func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, curSumMap map[string]int, epoch int64, idempotencyId string) error {
 	if len(curSumMap) == 0 {
 		logger.Warnf("no members available to patch %s/%s", a.ConfigMapName, a.Key)
 		return nil
@@ -217,34 +235,38 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, cu
 
 		logger.Infof("patched %s/%s on %s from %d to %d", a.ConfigMapName, a.Key, member, currentValue, newValue)
 
-		if err := patchConfigValue(ctx, member, a.ConfigMapName, a.Key, newValue, epoch); err != nil {
+		if err := patchConfigValue(ctx, member, a.ConfigMapName, a.Key, newValue, epoch, idempotencyId); err != nil {
 			logger.Errorf("ActionConfigValueSum: failed to patch config value %s/%s on %s: %v", a.ConfigMapName, a.Key, member, err)
 			return fmt.Errorf("failed to patch config value on %s: %w", member, err)
 		}
 
 		logger.Infof("successfully patched %s/%s on %s from %d to %d", a.ConfigMapName, a.Key, member, currentValue, newValue)
-
-		if a.OnChange != nil {
-			if err := a.OnChange.Execute(ctx, member, "default", epoch); err != nil {
-				logger.Errorf("ActionConfigValueSum: failed to execute onChange action on %s: %v", member, err)
-				return fmt.Errorf("failed to execute onChange action on %s: %w", member, err)
-			}
-		}
 	}
 	return nil
 }
 
-// TODO: Don't need on change, just concat with the next action
-func (o *OnChangeDeploymentRestart) GetType() OnChangeType {
-	return OnChangeTypeDeploymentRestart
+func (a *ActionK8sRestartDeployment) GetType() ActionType {
+	return ActionTypeK8sRestartDeployment
 }
 
-func (o *OnChangeDeploymentRestart) Execute(ctx context.Context, member string, namespace string, epoch int64) error {
-	if o.Deployment == "" {
+func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
-		logger.Error("OnChangeDeploymentRestart: deployment name is required")
+		logger.Error("ActionK8sRestartDeployment: deployment name is required")
 		return err
 	}
+
+	if a.Member == "" {
+		err := fmt.Errorf("member is required")
+		logger.Error("ActionK8sRestartDeployment: member is required")
+		return err
+	}
+
+	namespace := a.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
+
 	patchData := map[string]interface{}{
 		"spec": map[string]interface{}{
 			"template": map[string]interface{}{
@@ -257,11 +279,11 @@ func (o *OnChangeDeploymentRestart) Execute(ctx context.Context, member string, 
 		},
 	}
 
-	if err := patchResource(ctx, member, "deployments", namespace, o.Deployment, patchData, epoch); err != nil {
-		logger.Errorf("OnChangeDeploymentRestart: failed to restart deployment %s/%s via %s: %v", namespace, o.Deployment, member, err)
+	if err := patchResource(ctx, a.Member, "deployments", namespace, a.Deployment, patchData, epoch, idempotencyId); err != nil {
+		logger.Errorf("ActionK8sRestartDeployment: failed to restart deployment %s/%s via %s: %v", namespace, a.Deployment, a.Member, err)
 		return fmt.Errorf("failed to restart deployment: %w", err)
 	}
 
-	logger.Infof("successfully restarted deployment %s/%s via %s", namespace, o.Deployment, member)
+	logger.Infof("successfully restarted deployment %s/%s via %s", namespace, a.Deployment, a.Member)
 	return nil
 }

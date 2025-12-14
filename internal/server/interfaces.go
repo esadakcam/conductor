@@ -19,7 +19,6 @@ type KubernetesClient interface {
 	ExecDeployment(ctx context.Context, namespace, deploymentName, container string, command []string) ([]k8s.PodExecResult, error)
 }
 
-// EpochChecker defines the interface for epoch validation
-type EpochChecker interface {
-	Validate(ctx context.Context, requestEpoch int64) (bool, error)
+type Validator interface {
+	Validate(ctx context.Context, toValidate any) (bool, error)
 }

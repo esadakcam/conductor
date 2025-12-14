@@ -111,7 +111,7 @@ func fetchConfigValue(ctx context.Context, member string, configMapName string, 
 	return 0, fmt.Errorf("failed to fetch config value after %d attempts: %w", maxRetries+1, lastErr)
 }
 
-func patchResource(ctx context.Context, member string, resource string, namespace string, name string, patchData map[string]interface{}, epoch int64) error {
+func patchResource(ctx context.Context, member string, resource string, namespace string, name string, patchData map[string]interface{}, epoch int64, idempotencyId string) error {
 	// Create patch payload
 	patchPayload := map[string]interface{}{
 		"epoch": epoch,
@@ -133,6 +133,7 @@ func patchResource(ctx context.Context, member string, resource string, namespac
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Idempotency-Id", idempotencyId)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -148,12 +149,12 @@ func patchResource(ctx context.Context, member string, resource string, namespac
 	return nil
 }
 
-func patchConfigValue(ctx context.Context, member string, configMapName string, key string, newValue int, epoch int64) error {
+func patchConfigValue(ctx context.Context, member string, configMapName string, key string, newValue int, epoch int64, idempotencyId string) error {
 	patchData := map[string]interface{}{
 		"data": map[string]string{
 			key: strconv.Itoa(newValue),
 		},
 	}
 
-	return patchResource(ctx, member, "configmaps", "default", configMapName, patchData, epoch)
+	return patchResource(ctx, member, "configmaps", "default", configMapName, patchData, epoch, idempotencyId)
 }

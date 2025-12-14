@@ -15,7 +15,7 @@ import (
 // LeaderFunc is invoked once leadership is acquired.
 // The provided epoch is a monotonically increasing value updated via etcd.
 // The function should block until the leadership context is cancelled.
-type LeaderFunc func(ctx context.Context, epoch int64) error
+type LeaderFunc func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error
 
 // LeaderElector coordinates leader election against etcd using the Campaign API.
 // Leadership is bound to a lease so that failovers are handled automatically when
@@ -156,7 +156,7 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			_ = e.leaderFn(leaderCtx, epoch)
+			_ = e.leaderFn(leaderCtx, epoch, e.epochKey, e.client)
 		}()
 
 		var reason error
