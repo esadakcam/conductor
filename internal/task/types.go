@@ -13,16 +13,11 @@ const (
 type ActionType string
 
 const (
-	ActionTypeEndpoint          ActionType = "endpoint"
-	ActionTypeEcho              ActionType = "echo"
-	ActionTypeConfigValueSum    ActionType = "config_value_sum"
-	ActionTypeK8sExecDeployment ActionType = "k8s_exec_deployment"
-)
-
-type OnChangeType string
-
-const (
-	OnChangeTypeDeploymentRestart OnChangeType = "deployment_restart"
+	ActionTypeEndpoint             ActionType = "endpoint"
+	ActionTypeEcho                 ActionType = "echo"
+	ActionTypeConfigValueSum       ActionType = "config_value_sum"
+	ActionTypeK8sExecDeployment    ActionType = "k8s_exec_deployment"
+	ActionTypeK8sRestartDeployment ActionType = "k8s_restart_deployment"
 )
 
 type Config struct {
@@ -42,11 +37,6 @@ type Condition interface {
 type Action interface {
 	Execute(ctx context.Context, epoch int64, idempotencyId string) error
 	GetType() ActionType
-}
-
-type OnChange interface {
-	GetType() OnChangeType
-	Execute(ctx context.Context, member string, namespace string, epoch int64) error
 }
 
 type ConditionEndpointSuccess struct {
@@ -86,12 +76,6 @@ type ActionConfigValueSum struct {
 	Key           string     `yaml:"key"`
 	Sum           int        `yaml:"sum"`
 	Members       []string   `yaml:"members"` // todo make it a struct and pass auth info
-	OnChange      OnChange   `yaml:"onChange"`
-}
-
-type OnChangeDeploymentRestart struct {
-	Type       OnChangeType `yaml:"type"`
-	Deployment string       `yaml:"deployment"`
 }
 
 type ActionK8sExecDeployment struct {
@@ -101,6 +85,13 @@ type ActionK8sExecDeployment struct {
 	Namespace  string     `yaml:"namespace,omitempty"`
 	Container  string     `yaml:"container,omitempty"`
 	Command    []string   `yaml:"command"`
+}
+
+type ActionK8sRestartDeployment struct {
+	Type       ActionType `yaml:"type"`
+	Member     string     `yaml:"member"`
+	Deployment string     `yaml:"deployment"`
+	Namespace  string     `yaml:"namespace,omitempty"`
 }
 
 // TODO: Add k8s related actions

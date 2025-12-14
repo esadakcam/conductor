@@ -223,28 +223,16 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, cu
 		}
 
 		logger.Infof("successfully patched %s/%s on %s from %d to %d", a.ConfigMapName, a.Key, member, currentValue, newValue)
-
-		if a.OnChange != nil {
-			if err := a.OnChange.Execute(ctx, member, "default", epoch); err != nil {
-				logger.Errorf("ActionConfigValueSum: failed to execute onChange action on %s: %v", member, err)
-				return fmt.Errorf("failed to execute onChange action on %s: %w", member, err)
-			}
-		}
 	}
 	return nil
 }
 
-// TODO: Don't need on change, just concat with the next action
-func (o *OnChangeDeploymentRestart) GetType() OnChangeType {
-	return OnChangeTypeDeploymentRestart
+func (a *ActionK8sRestartDeployment) GetType() ActionType {
+	return ActionTypeK8sRestartDeployment
 }
 
-func (o *OnChangeDeploymentRestart) Execute(ctx context.Context, member string, namespace string, epoch int64) error {
-	if o.Deployment == "" {
-		err := fmt.Errorf("deployment name is required")
-		logger.Error("OnChangeDeploymentRestart: deployment name is required")
-		return err
-	}
+func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+
 	patchData := map[string]interface{}{
 		"spec": map[string]interface{}{
 			"template": map[string]interface{}{
@@ -257,11 +245,11 @@ func (o *OnChangeDeploymentRestart) Execute(ctx context.Context, member string, 
 		},
 	}
 
-	if err := patchResource(ctx, member, "deployments", namespace, o.Deployment, patchData, epoch); err != nil {
-		logger.Errorf("OnChangeDeploymentRestart: failed to restart deployment %s/%s via %s: %v", namespace, o.Deployment, member, err)
+	if err := patchResource(ctx, a.Member, "deployments", a.Namespace, a.Deployment, patchData, epoch); err != nil {
+		logger.Errorf("OnChangeDeploymentRestart: failed to restart deployment %s/%s via %s: %v", a.Namespace, a.Deployment, a.Member, err)
 		return fmt.Errorf("failed to restart deployment: %w", err)
 	}
 
-	logger.Infof("successfully restarted deployment %s/%s via %s", namespace, o.Deployment, member)
+	logger.Infof("successfully restarted deployment %s/%s via %s", a.Namespace, a.Deployment, a.Member)
 	return nil
 }
