@@ -48,6 +48,7 @@ func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64, idempotencyId
 	for key, value := range a.Headers {
 		req.Header.Set(key, value)
 	}
+	req.Header.Set("Idempotency-Key", idempotencyId)
 
 	// Set Content-Type header if body is provided and Content-Type is not already set
 	if a.Body != "" && req.Header.Get("Content-Type") == "" {
@@ -100,7 +101,7 @@ func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64, idempot
 		return nil
 	}
 
-	return a.distributeAndApplyChanges(ctx, curSumMap, epoch)
+	return a.distributeAndApplyChanges(ctx, curSumMap, epoch, idempotencyId)
 }
 
 func (a *ActionK8sExecDeployment) GetType() ActionType {
@@ -156,6 +157,7 @@ func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64, idem
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", idempotencyId)
 
 	client := httpclient.Get()
 	resp, err := client.Do(req)
@@ -198,7 +200,7 @@ func (a *ActionConfigValueSum) fetchCurrentValues(ctx context.Context) map[strin
 	return curSumMap
 }
 
-func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, curSumMap map[string]int, epoch int64) error {
+func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, curSumMap map[string]int, epoch int64, idempotencyId string) error {
 	if len(curSumMap) == 0 {
 		logger.Warnf("no members available to patch %s/%s", a.ConfigMapName, a.Key)
 		return nil
@@ -219,7 +221,7 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, cu
 
 		logger.Infof("patched %s/%s on %s from %d to %d", a.ConfigMapName, a.Key, member, currentValue, newValue)
 
-		if err := patchConfigValue(ctx, member, a.ConfigMapName, a.Key, newValue, epoch); err != nil {
+		if err := patchConfigValue(ctx, member, a.ConfigMapName, a.Key, newValue, epoch, idempotencyId); err != nil {
 			logger.Errorf("ActionConfigValueSum: failed to patch config value %s/%s on %s: %v", a.ConfigMapName, a.Key, member, err)
 			return fmt.Errorf("failed to patch config value on %s: %w", member, err)
 		}
@@ -263,7 +265,7 @@ func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, epoch int64, i
 		},
 	}
 
-	if err := patchResource(ctx, a.Member, "deployments", namespace, a.Deployment, patchData, epoch); err != nil {
+	if err := patchResource(ctx, a.Member, "deployments", namespace, a.Deployment, patchData, epoch, idempotencyId); err != nil {
 		logger.Errorf("OnChangeDeploymentRestart: failed to restart deployment %s/%s via %s: %v", namespace, a.Deployment, a.Member, err)
 		return fmt.Errorf("failed to restart deployment: %w", err)
 	}

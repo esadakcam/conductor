@@ -87,33 +87,33 @@ tasks:
   #     selector: "open5gs"
   #     value: 1
       
-  # - name: nginx-data value sum accross members is 10
-  # - when:
-  #     type: "always_true"
-  #   then:
-  #     type: "config_value_sum"
-  #     config_map: "nginx-data"
-  #     key: "value"
-  #     sum: 10
-  #     members:
-  #       - "http://localhost:8080"
-  #       # - "http://192.168.1.111:8080"
-  #       # - "http://192.168.1.112:8080"
-  #       # - "http://192.168.1.113:8080"
-  #     onChange:
-  #       - type: "deployment_restart" 
-  #         deployment: "nginx"
-
-
-  - name: Execute ls in ngnix
+  - name: nginx-data value sum accross members is 10
     when:
       - type: "always_true"
     then:
-      - type: "k8s_exec_deployment"
-        member: "http://localhost:8080"
-        deployment: "nginx"
-        command: ["ls", "/"]
-      - type: "k8s_exec_deployment"
-        member: "http://localhost:8080"
-        deployment: "nginx"
-        command: ["ls", "/etc"]
+      - type: "config_value_sum"
+        config_map: "nginx-data"
+        key: "value"
+        sum: 20
+        members:
+          - "http://localhost:8080"
+          # - "http://192.168.1.111:8080"
+          # - "http://192.168.1.112:8080"
+          # - "http://192.168.1.113:8080"
+        # onChange:
+        #   - type: "deployment_restart" 
+        #     deployment: "nginx"
+
+
+  # - name: Execute ls in ngnix
+  #   when:
+  #     - type: "always_true"
+  #   then:
+  #     - type: "k8s_exec_deployment"
+  #       member: "http://localhost:8080"
+  #       deployment: "nginx"
+  #       command: ["ls", "/"]
+  #     - type: "k8s_exec_deployment"
+  #       member: "http://localhost:8080"
+  #       deployment: "nginx"
+  #       command: ["ls", "/etc"]
