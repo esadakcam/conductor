@@ -18,14 +18,14 @@ import (
 	"sigs.k8s.io/kind/pkg/cluster"
 )
 
-// MockEpochValidator satisfies EpochChecker
-type MockEpochValidator struct {
-	ValidateFunc func(ctx context.Context, requestEpoch int64) (bool, error)
+// MockValidator satisfies Validator interface
+type MockValidator struct {
+	ValidateFunc func(ctx context.Context, toValidate any) (bool, error)
 }
 
-func (m *MockEpochValidator) Validate(ctx context.Context, requestEpoch int64) (bool, error) {
+func (m *MockValidator) Validate(ctx context.Context, toValidate any) (bool, error) {
 	if m.ValidateFunc != nil {
-		return m.ValidateFunc(ctx, requestEpoch)
+		return m.ValidateFunc(ctx, toValidate)
 	}
 	return true, nil
 }
@@ -140,12 +140,12 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{
-			ValidateFunc: func(ctx context.Context, requestEpoch int64) (bool, error) {
+		mockValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
 				return true, nil
 			},
 		}
-		h := NewHandler(k8sClient, mockEpoch)
+		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
 
 		// Create Pod
 		podName := "test-pod"
@@ -175,6 +175,7 @@ func TestIntegrationHandlers(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/v1/pods/"+ns, bytes.NewReader(bodyBytes))
 		req.SetPathValue("resource", "pods")
 		req.SetPathValue("namespace", ns)
+		req.Header.Set("X-Idempotency-Id", "test-create-1")
 		w := httptest.NewRecorder()
 
 		h.HandleCreate(w, req)
@@ -209,8 +210,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{}
-		h := NewHandler(k8sClient, mockEpoch)
+		mockValidator := &MockValidator{}
+		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
 
 		// Create a configmap directly to list
 		cmName := "test-cm"
@@ -263,8 +264,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{}
-		h := NewHandler(k8sClient, mockEpoch)
+		mockValidator := &MockValidator{}
+		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
 
 		// Create initial configmap
 		cmName := "update-test-cm"
@@ -305,6 +306,7 @@ func TestIntegrationHandlers(t *testing.T) {
 		req.SetPathValue("resource", "configmaps")
 		req.SetPathValue("namespace", ns)
 		req.SetPathValue("name", cmName)
+		req.Header.Set("X-Idempotency-Id", "test-update-1")
 		w := httptest.NewRecorder()
 
 		h.HandleUpdate(w, req)
@@ -327,8 +329,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{}
-		h := NewHandler(k8sClient, mockEpoch)
+		mockValidator := &MockValidator{}
+		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
 
 		// Create initial configmap
 		cmName := "patch-test-cm"
@@ -372,6 +374,7 @@ func TestIntegrationHandlers(t *testing.T) {
 		req.SetPathValue("resource", "configmaps")
 		req.SetPathValue("namespace", ns)
 		req.SetPathValue("name", cmName)
+		req.Header.Set("X-Idempotency-Id", "test-patch-1")
 		w := httptest.NewRecorder()
 
 		h.HandlePatch(w, req)
@@ -405,8 +408,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{}
-		h := NewHandler(k8sClient, mockEpoch)
+		mockValidator := &MockValidator{}
+		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
 
 		cmName := "delete-test-cm"
 		cm := &unstructured.Unstructured{
@@ -432,6 +435,7 @@ func TestIntegrationHandlers(t *testing.T) {
 		req.SetPathValue("resource", "configmaps")
 		req.SetPathValue("namespace", ns)
 		req.SetPathValue("name", cmName)
+		req.Header.Set("X-Idempotency-Id", "test-delete-1")
 		w := httptest.NewRecorder()
 
 		h.HandleDelete(w, req)
@@ -450,8 +454,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{}
-		h := NewHandler(k8sClient, mockEpoch)
+		mockValidator := &MockValidator{}
+		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
 
 		// Create a deployment
 		deployName := "exec-test-deploy"
@@ -533,6 +537,7 @@ func TestIntegrationHandlers(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/"+deployName, bytes.NewReader(bodyBytes))
 		req.SetPathValue("namespace", ns)
 		req.SetPathValue("name", deployName)
+		req.Header.Set("X-Idempotency-Id", "test-exec-1")
 		w := httptest.NewRecorder()
 
 		h.HandleExecDeployment(w, req)
@@ -573,8 +578,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{}
-		h := NewHandler(k8sClient, mockEpoch)
+		mockValidator := &MockValidator{}
+		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
 
 		// Create a deployment
 		deployName := "exec-fail-deploy"
@@ -656,6 +661,7 @@ func TestIntegrationHandlers(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/"+deployName, bytes.NewReader(bodyBytes))
 		req.SetPathValue("namespace", ns)
 		req.SetPathValue("name", deployName)
+		req.Header.Set("X-Idempotency-Id", "test-exec-fail-1")
 		w := httptest.NewRecorder()
 
 		h.HandleExecDeployment(w, req)
@@ -688,12 +694,13 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{}
-		h := NewHandler(k8sClient, mockEpoch)
+		mockValidator := &MockValidator{}
+		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
 
 		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/test-deploy", bytes.NewReader([]byte("invalid json")))
 		req.SetPathValue("namespace", ns)
 		req.SetPathValue("name", "test-deploy")
+		req.Header.Set("X-Idempotency-Id", "test-exec-invalid-1")
 		w := httptest.NewRecorder()
 
 		h.HandleExecDeployment(w, req)
@@ -707,8 +714,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{}
-		h := NewHandler(k8sClient, mockEpoch)
+		mockValidator := &MockValidator{}
+		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
 
 		execBody := ExecDeploymentRequest{
 			Epoch:   1,
@@ -719,6 +726,7 @@ func TestIntegrationHandlers(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/test-deploy", bytes.NewReader(bodyBytes))
 		req.SetPathValue("namespace", ns)
 		req.SetPathValue("name", "test-deploy")
+		req.Header.Set("X-Idempotency-Id", "test-exec-missing-cmd-1")
 		w := httptest.NewRecorder()
 
 		h.HandleExecDeployment(w, req)
@@ -738,12 +746,18 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{
-			ValidateFunc: func(ctx context.Context, requestEpoch int64) (bool, error) {
+		// Use separate validators: idempotency passes, epoch fails
+		idempotencyValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+				return true, nil
+			},
+		}
+		epochValidator := &MockValidator{
+			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
 				return false, nil
 			},
 		}
-		h := NewHandler(k8sClient, mockEpoch)
+		h := NewHandler(k8sClient, epochValidator, idempotencyValidator, nil, "")
 
 		execBody := ExecDeploymentRequest{
 			Epoch:   1,
@@ -754,6 +768,7 @@ func TestIntegrationHandlers(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/test-deploy", bytes.NewReader(bodyBytes))
 		req.SetPathValue("namespace", ns)
 		req.SetPathValue("name", "test-deploy")
+		req.Header.Set("X-Idempotency-Id", "test-exec-stale-1")
 		w := httptest.NewRecorder()
 
 		h.HandleExecDeployment(w, req)
@@ -767,8 +782,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		ns := setupTestNamespace(t, k8sClient)
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
-		mockEpoch := &MockEpochValidator{}
-		h := NewHandler(k8sClient, mockEpoch)
+		mockValidator := &MockValidator{}
+		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
 
 		execBody := ExecDeploymentRequest{
 			Epoch:   1,
@@ -779,6 +794,7 @@ func TestIntegrationHandlers(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/nonexistent-deploy", bytes.NewReader(bodyBytes))
 		req.SetPathValue("namespace", ns)
 		req.SetPathValue("name", "nonexistent-deploy")
+		req.Header.Set("X-Idempotency-Id", "test-exec-notfound-1")
 		w := httptest.NewRecorder()
 
 		h.HandleExecDeployment(w, req)

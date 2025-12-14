@@ -133,7 +133,7 @@ func patchResource(ctx context.Context, member string, resource string, namespac
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotency-Key", idempotencyId)
+	req.Header.Set("X-Idempotency-Id", idempotencyId)
 
 	resp, err := client.Do(req)
 	if err != nil {

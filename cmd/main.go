@@ -64,10 +64,11 @@ func main() {
 	}
 
 	// Initialize Epoch Validator
-	epochValidator := server.NewEpochValidator(etcdClient, "")
+	epochValidator := server.NewEpochValidator(etcdClient)
+	idempotencyValidator := server.NewIdempotencyValidator(etcdClient, config.Name)
 
 	// Initialize HTTP Server
-	srvHandler := server.NewHandler(k8sClient, epochValidator)
+	srvHandler := server.NewHandler(k8sClient, epochValidator, idempotencyValidator, etcdClient, config.Name)
 	srv := server.NewServer(server.Config{Port: config.Server.Port}, srvHandler)
 
 	// Start server in background

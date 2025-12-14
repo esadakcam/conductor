@@ -48,7 +48,7 @@ func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64, idempotencyId
 	for key, value := range a.Headers {
 		req.Header.Set(key, value)
 	}
-	req.Header.Set("Idempotency-Key", idempotencyId)
+	req.Header.Set("X-Idempotency-Id", idempotencyId)
 
 	// Set Content-Type header if body is provided and Content-Type is not already set
 	if a.Body != "" && req.Header.Get("Content-Type") == "" {
@@ -157,7 +157,7 @@ func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64, idem
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotency-Key", idempotencyId)
+	req.Header.Set("X-Idempotency-Id", idempotencyId)
 
 	client := httpclient.Get()
 	resp, err := client.Do(req)
