@@ -65,31 +65,37 @@ func (o *Outbox) AddTask(toExecute task.Task) error {
 		o.mu.Unlock()
 		return nil
 	}
-	o.executingTasks[toExecute.Name] = true
-	o.mu.Unlock()
+
+	// Prepare the outbox item while holding the lock
 	item := OutboxItem{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		TaskStep:  0,
 	}
-	json, err := json.Marshal(item)
+	jsonData, err := json.Marshal(item)
 	if err != nil {
+		o.mu.Unlock()
 		logger.Errorf("failed to marshal item: %v", err)
 		return err
 	}
 	then := []clientv3.Op{
-		clientv3.OpPut(fmt.Sprintf("%s/%s", outboxKey, toExecute.Name), string(json)),
+		clientv3.OpPut(fmt.Sprintf("%s/%s", outboxKey, toExecute.Name), string(jsonData)),
 	}
 	cmp := clientv3.Compare(clientv3.Value(o.epochKey), "=", fmt.Sprintf("%d", o.epoch))
+
+	// Hold lock through transaction commit to prevent TOCTOU race
 	_, err = o.client.Txn(o.ctx).If(cmp).Then(then...).Commit()
 	if err != nil {
-		o.mu.Lock()
-		o.executingTasks[toExecute.Name] = false
 		o.mu.Unlock()
 		logger.Errorf("failed to add task to outbox: %v", err)
 		return err
 	}
-	o.fullfillTaskFromOutbox(toExecute)
+
+	// Only mark as executing after successful commit
+	o.executingTasks[toExecute.Name] = true
+	o.mu.Unlock()
+
+	o.fulfillTaskFromOutbox(toExecute)
 	return nil
 }
 
@@ -104,12 +110,12 @@ func (o *Outbox) init(tasks []task.Task) {
 			if len(existing.Kvs) == 0 {
 				return
 			}
-			o.fullfillTaskFromOutbox(t)
+			o.fulfillTaskFromOutbox(t)
 		}(t)
 	}
 }
 
-func (o *Outbox) fullfillTaskFromOutbox(task task.Task) error {
+func (o *Outbox) fulfillTaskFromOutbox(task task.Task) error {
 	existing, err := o.client.Get(o.ctx, fmt.Sprintf("%s/%s", outboxKey, task.Name))
 	if err != nil {
 		logger.Errorf("failed to get existing task: %v", err)

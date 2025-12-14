@@ -280,7 +280,7 @@ func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, epoch int64, i
 	}
 
 	if err := patchResource(ctx, a.Member, "deployments", namespace, a.Deployment, patchData, epoch, idempotencyId); err != nil {
-		logger.Errorf("OnChangeDeploymentRestart: failed to restart deployment %s/%s via %s: %v", namespace, a.Deployment, a.Member, err)
+		logger.Errorf("ActionK8sRestartDeployment: failed to restart deployment %s/%s via %s: %v", namespace, a.Deployment, a.Member, err)
 		return fmt.Errorf("failed to restart deployment: %w", err)
 	}
 

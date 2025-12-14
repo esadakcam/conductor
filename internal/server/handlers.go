@@ -359,7 +359,7 @@ func (h *Handler) validateIdempotency(w http.ResponseWriter, r *http.Request) (s
 	}
 	if !valid {
 		logger.Warnf("Idempotency %s already processed for create", idempotencyId)
-		h.sendError(w, http.StatusNoContent, "idempotency already processed")
+		h.sendJSON(w, http.StatusNoContent, "idempotency already processed")
 		return "", false
 	}
 	return idempotencyId, true
