@@ -152,6 +152,12 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
+		case ActionTypeDelay:
+			var a ActionDelay
+			if err := actionNode.Decode(&a); err != nil {
+				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
+			}
+			action = &a
 		case ActionTypeConfigValueSum:
 			var a ActionConfigValueSum
 			if err := actionNode.Decode(&a); err != nil {

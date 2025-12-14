@@ -97,13 +97,6 @@ tasks:
         sum: 30
         members:
           - "http://localhost:8080"
-          # - "http://192.168.1.111:8080"
-          # - "http://192.168.1.112:8080"
-          # - "http://192.168.1.113:8080"
-        # onChange:
-        #   - type: "deployment_restart" 
-        #     deployment: "nginx"
-
 
   # - name: Execute ls in ngnix
   #   when:
@@ -117,3 +110,31 @@ tasks:
   #       member: "http://localhost:8080"
   #       deployment: "nginx"
   #       command: ["ls", "/etc"]
+  # - name: nginx-data value sum accross members is 30
+  #   when:
+  #     - type: "always_true"
+  #   then:
+  #     - type: "config_value_sum"
+  #       config_map: "nginx-data"
+  #       key: "value"
+  #       sum: 30
+  #       members:
+  #         # - "http://localhost:8080"
+  #         - "http://192.168.1.111:8080"
+  #         - "http://192.168.1.112:8080"
+  #         - "http://192.168.1.113:8080"
+  #       # onChange:
+  #       #   - type: "deployment_restart" 
+  #       #     deployment: "nginx"
+
+  #     - type: delay
+  #       time: 3s
+  #     - type: "config_value_sum"
+  #       config_map: "nginx-data"
+  #       key: "value"
+  #       sum: 50
+  #       members:
+  #         # - "http://localhost:8080"
+  #         - "http://192.168.1.111:8080"
+  #         - "http://192.168.1.112:8080"
+  #         - "http://192.168.1.113:8080"

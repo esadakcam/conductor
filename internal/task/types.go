@@ -1,6 +1,9 @@
 package task
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type ConditionType string
 
@@ -15,6 +18,7 @@ type ActionType string
 const (
 	ActionTypeEndpoint             ActionType = "endpoint"
 	ActionTypeEcho                 ActionType = "echo"
+	ActionTypeDelay                ActionType = "delay"
 	ActionTypeConfigValueSum       ActionType = "config_value_sum"
 	ActionTypeK8sExecDeployment    ActionType = "k8s_exec_deployment"
 	ActionTypeK8sRestartDeployment ActionType = "k8s_restart_deployment"
@@ -69,6 +73,11 @@ type ActionEndpoint struct {
 type ActionEcho struct {
 	Type    ActionType `yaml:"type"`
 	Message string     `yaml:"message"`
+}
+
+type ActionDelay struct {
+	Type ActionType    `yaml:"type"`
+	Time time.Duration `yaml:"time"`
 }
 
 type ActionConfigValueSum struct {

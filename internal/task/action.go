@@ -84,6 +84,20 @@ func (a *ActionEcho) Execute(ctx context.Context, epoch int64, idempotencyId str
 	return nil
 }
 
+func (a *ActionDelay) GetType() ActionType {
+	return ActionTypeDelay
+}
+
+func (a *ActionDelay) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+	logger.Infof("ActionDelay: sleeping for %s", a.Time)
+	select {
+	case <-time.After(a.Time):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (a *ActionConfigValueSum) GetType() ActionType {
 	return ActionTypeConfigValueSum
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/esadakcam/conductor/internal/task"
 )
 
-const watchInterval = 1 * time.Second
+const watchInterval = 15 * time.Second
 
 func Conduct(ctx context.Context, tasks []task.Task, outbox *Outbox) {
 	var wg sync.WaitGroup
