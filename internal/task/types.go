@@ -40,7 +40,7 @@ type Condition interface {
 }
 
 type Action interface {
-	Execute(ctx context.Context, epoch int64) error
+	Execute(ctx context.Context, epoch int64, idempotencyId string) error
 	GetType() ActionType
 }
 

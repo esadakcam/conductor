@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestActionEndpoint_Execute(t *testing.T) {
@@ -266,7 +268,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 				tt.action.Endpoint = server.URL
 			}
 
-			err := tt.action.Execute(context.Background(), 0)
+			err := tt.action.Execute(context.Background(), 0, uuid.New().String())
 
 			if tt.expectedError {
 				if err == nil {
@@ -287,7 +289,7 @@ func TestActionEndpoint_Execute_InvalidEndpoint(t *testing.T) {
 		Method:   "GET",
 	}
 
-	err := action.Execute(context.Background(), 0)
+	err := action.Execute(context.Background(), 0, uuid.New().String())
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -327,7 +329,7 @@ func TestActionEndpoint_Execute_HTTPStatusCodes(t *testing.T) {
 				Method:   "GET",
 			}
 
-			err := action.Execute(context.Background(), 0)
+			err := action.Execute(context.Background(), 0, uuid.New().String())
 
 			if tc.expectedError {
 				if err == nil {
@@ -863,7 +865,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 				tt.action.OnChange = mock
 			}
 
-			err := tt.action.Execute(context.Background(), 1)
+			err := tt.action.Execute(context.Background(), 1, uuid.New().String())
 
 			if tt.expectedError {
 				if err == nil {
@@ -1137,7 +1139,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			err := tt.action.Execute(context.Background(), tt.epoch)
+			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
 
 			if tt.expectedError {
 				if err == nil {
@@ -1161,7 +1163,7 @@ func TestActionK8sExecDeployment_Execute_InvalidEndpoint(t *testing.T) {
 		Command:    []string{"echo"},
 	}
 
-	err := action.Execute(context.Background(), 1)
+	err := action.Execute(context.Background(), 1, uuid.New().String())
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")

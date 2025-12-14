@@ -7,6 +7,7 @@ import (
 
 	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/task"
+	"github.com/google/uuid"
 )
 
 const watchInterval = 1 * time.Second
@@ -37,7 +38,7 @@ func watch(ctx context.Context, task task.Task, epoch int64) {
 			}
 			if result {
 				logger.Infof("Condition met, executing action for task %s", task.When.GetType())
-				err := task.Then.Execute(ctx, epoch)
+				err := task.Then.Execute(ctx, epoch, uuid.New().String())
 				if err != nil {
 					logger.Errorf("Error executing action for task %s: %v", task.When.GetType(), err)
 					continue

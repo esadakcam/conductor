@@ -18,7 +18,7 @@ func (a *ActionEndpoint) GetType() ActionType {
 	return ActionTypeEndpoint
 }
 
-func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64) error {
+func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
 	if a.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
 		logger.Error("ActionEndpoint: endpoint is required")
@@ -78,7 +78,7 @@ func (a *ActionEcho) GetType() ActionType {
 	return ActionTypeEcho
 }
 
-func (a *ActionEcho) Execute(ctx context.Context, epoch int64) error {
+func (a *ActionEcho) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
 	logger.Info(a.Message)
 	return nil
 }
@@ -87,7 +87,7 @@ func (a *ActionConfigValueSum) GetType() ActionType {
 	return ActionTypeConfigValueSum
 }
 
-func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64) error {
+func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
 	curSumMap := a.fetchCurrentValues(ctx)
 
 	curSum := 0
@@ -107,7 +107,7 @@ func (a *ActionK8sExecDeployment) GetType() ActionType {
 	return ActionTypeK8sExecDeployment
 }
 
-func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64) error {
+func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
 		logger.Error("ActionK8sExecDeployment: deployment name is required")
