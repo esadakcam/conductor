@@ -100,6 +100,7 @@ func (o *Outbox) AddTask(toExecute task.Task) error {
 }
 
 func (o *Outbox) init(tasks []task.Task) {
+	logger.Infof("Initializing outbox with %d tasks", len(tasks))
 	for _, t := range tasks {
 		go func(t task.Task) {
 			existing, err := o.client.Get(o.ctx, fmt.Sprintf("%s/%s", outboxKey, t.Name))
@@ -110,6 +111,7 @@ func (o *Outbox) init(tasks []task.Task) {
 			if len(existing.Kvs) == 0 {
 				return
 			}
+			logger.Infof("Fulfilling task %s from outbox (init)", t.Name)
 			o.fulfillTaskFromOutbox(t)
 		}(t)
 	}
