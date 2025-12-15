@@ -10,8 +10,10 @@ import (
 const DefaultTimeout = 30 * time.Second
 
 var (
-	defaultClient *http.Client
-	once          sync.Once
+	defaultClient    *http.Client
+	once             sync.Once
+	longRunnerClient *http.Client
+	onceLongRunner   sync.Once
 )
 
 // Get returns the default HTTP client.
@@ -25,4 +27,18 @@ func Get() *http.Client {
 		}
 	})
 	return defaultClient
+}
+
+// GetLongRunner returns an HTTP client without a client-level timeout.
+// Use this for long-running operations where the timeout should be
+// controlled by the request context instead of the client.
+// This allows operations like waiting for deployment rollouts to use
+// custom timeouts via context.WithTimeout.
+func GetLongRunner() *http.Client {
+	onceLongRunner.Do(func() {
+		longRunnerClient = &http.Client{
+			// No Timeout set - rely on context for timeout control
+		}
+	})
+	return longRunnerClient
 }

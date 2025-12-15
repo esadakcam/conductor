@@ -8,9 +8,10 @@ import (
 type ConditionType string
 
 const (
-	ConditionTypeEndpointSuccess ConditionType = "endpoint_success"
-	ConditionTypeEndpointValue   ConditionType = "endpoint_value"
-	ConditionTypeAlwaysTrue      ConditionType = "always_true"
+	ConditionTypeEndpointSuccess  ConditionType = "endpoint_success"
+	ConditionTypeEndpointValue    ConditionType = "endpoint_value"
+	ConditionTypePrometheusMetric ConditionType = "prometheus_metric"
+	ConditionTypeAlwaysTrue       ConditionType = "always_true"
 )
 
 type ActionType string
@@ -23,6 +24,8 @@ const (
 	ActionTypeK8sExecDeployment        ActionType = "k8s_exec_deployment"
 	ActionTypeK8sRestartDeployment     ActionType = "k8s_restart_deployment"
 	ActionTypeK8sWaitDeploymentRollout ActionType = "k8s_wait_deployment_rollout"
+	ActionTypeK8sUpdateConfigMap       ActionType = "k8s_update_configmap"
+	ActionTypeK8sScaleDeployment       ActionType = "k8s_scale_deployment"
 )
 
 type Config struct {
@@ -61,6 +64,14 @@ type ConditionEndpointValue struct {
 	Endpoint string        `yaml:"endpoint"`
 	Value    int           `yaml:"value"`
 	Operator string        `yaml:"operator"` // eq, ne, lt, gt, le, ge
+}
+
+type ConditionPrometheusMetric struct {
+	Type       ConditionType `yaml:"type"`
+	Endpoint   string        `yaml:"endpoint"`
+	MetricName string        `yaml:"metric_name"`
+	Value      float64       `yaml:"value"`
+	Operator   string        `yaml:"operator"` // eq, ne, lt, gt, le, ge
 }
 
 type ActionEndpoint struct {
@@ -111,4 +122,21 @@ type ActionK8sWaitDeploymentRollout struct {
 	Deployment string        `yaml:"deployment"`
 	Namespace  string        `yaml:"namespace,omitempty"`
 	Timeout    time.Duration `yaml:"timeout,omitempty"` // Default: 5 minutes
+}
+
+type ActionK8sUpdateConfigMap struct {
+	Type      ActionType `yaml:"type"`
+	Member    string     `yaml:"member"`
+	ConfigMap string     `yaml:"config_map"`
+	Namespace string     `yaml:"namespace,omitempty"`
+	Key       string     `yaml:"key"`
+	Value     string     `yaml:"value"`
+}
+
+type ActionK8sScaleDeployment struct {
+	Type       ActionType `yaml:"type"`
+	Member     string     `yaml:"member"`
+	Deployment string     `yaml:"deployment"`
+	Namespace  string     `yaml:"namespace,omitempty"`
+	Replicas   int32      `yaml:"replicas"`
 }

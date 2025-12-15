@@ -59,7 +59,7 @@ func (o *Outbox) IsTaskExecuting(ctx context.Context, taskName string) bool {
 	return true
 }
 
-func (o *Outbox) AddTask(toExecute task.Task) error {
+func (o *Outbox) ExecuteTask(toExecute task.Task) error {
 	o.mu.Lock()
 	if o.executingTasks[toExecute.Name] {
 		o.mu.Unlock()

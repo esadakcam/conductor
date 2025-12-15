@@ -52,12 +52,12 @@ func watch(ctx context.Context, task task.Task, outbox *Outbox) {
 
 			if allConditionsMet {
 				logger.Infof("All conditions met, executing actions for task %s", task.Name)
-				err := outbox.AddTask(task)
+				err := outbox.ExecuteTask(task)
 				if err != nil {
 					logger.Errorf("Error adding task %s to outbox: %v", task.Name, err)
 					continue
 				}
-				logger.Infof("Task %s added to outbox", task.Name)
+				logger.Infof("Task %s executed", task.Name)
 				continue
 			}
 		}
