@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -757,6 +758,13 @@ func TestActionK8sRestartDeployment_GetType(t *testing.T) {
 	}
 }
 
+func TestActionK8sWaitDeploymentRollout_GetType(t *testing.T) {
+	action := &ActionK8sWaitDeploymentRollout{}
+	if action.GetType() != ActionTypeK8sWaitDeploymentRollout {
+		t.Errorf("expected GetType() to return ActionTypeK8sWaitDeploymentRollout, got %v", action.GetType())
+	}
+}
+
 func TestActionK8sExecDeployment_GetType(t *testing.T) {
 	action := &ActionK8sExecDeployment{}
 	if action.GetType() != ActionTypeK8sExecDeployment {
@@ -1176,5 +1184,263 @@ func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
+	tests := []struct {
+		name          string
+		action        *ActionK8sWaitDeploymentRollout
+		epoch         int64
+		serverHandler http.HandlerFunc
+		expectedError bool
+		errorContains string
+	}{
+		{
+			name: "successful wait with default namespace and timeout",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "my-deployment",
+			},
+			epoch: 123,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "POST" {
+					t.Errorf("expected POST method, got %s", r.Method)
+				}
+				expectedPath := "/api/v1/rollout/deployments/default/my-deployment"
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+				if r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("expected Content-Type application/json, got %s", r.Header.Get("Content-Type"))
+				}
+				if r.Header.Get("X-Idempotency-Id") == "" {
+					t.Errorf("expected X-Idempotency-Id header to be set")
+				}
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("failed to decode request body: %v", err)
+				}
+				if epoch, ok := body["epoch"].(float64); !ok || epoch != 123 {
+					t.Errorf("expected epoch 123, got %v", body["epoch"])
+				}
+				// Default timeout is 5m
+				if timeout, ok := body["timeout"].(string); !ok || timeout != "5m0s" {
+					t.Errorf("expected timeout '5m0s', got %v", body["timeout"])
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"deploymentName": "my-deployment",
+					"namespace":      "default",
+					"status":         "completed",
+				})
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful wait with custom namespace",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "my-deployment",
+				Namespace:  "custom-ns",
+			},
+			epoch: 456,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				expectedPath := "/api/v1/rollout/deployments/custom-ns/my-deployment"
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"status": "completed",
+				})
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful wait with custom timeout",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "my-deployment",
+				Timeout:    10 * time.Minute,
+			},
+			epoch: 789,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("failed to decode request body: %v", err)
+				}
+				if timeout, ok := body["timeout"].(string); !ok || timeout != "10m0s" {
+					t.Errorf("expected timeout '10m0s', got %v", body["timeout"])
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{})
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful wait with short timeout",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "my-deployment",
+				Timeout:    30 * time.Second,
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				json.NewDecoder(r.Body).Decode(&body)
+				if timeout, ok := body["timeout"].(string); !ok || timeout != "30s" {
+					t.Errorf("expected timeout '30s', got %v", body["timeout"])
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{})
+			},
+			expectedError: false,
+		},
+		{
+			name: "missing deployment name returns error",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "",
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "deployment name is required",
+		},
+		{
+			name: "missing member returns error",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "my-deployment",
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "member is required",
+		},
+		{
+			name: "HTTP 400 Bad Request returns error",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "my-deployment",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "invalid request",
+					"code":  400,
+				})
+			},
+			expectedError: true,
+			errorContains: "status code 400",
+		},
+		{
+			name: "HTTP 404 Not Found returns error",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "nonexistent",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte("deployment not found"))
+			},
+			expectedError: true,
+			errorContains: "status code 404",
+		},
+		{
+			name: "HTTP 409 Conflict (stale epoch) returns error",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "my-deployment",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "stale epoch",
+					"code":  409,
+				})
+			},
+			expectedError: true,
+			errorContains: "status code 409",
+		},
+		{
+			name: "HTTP 500 Internal Server Error returns error",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "my-deployment",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("timed out waiting for deployment"))
+			},
+			expectedError: true,
+			errorContains: "status code 500",
+		},
+		{
+			name: "HTTP 504 Gateway Timeout returns error",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "my-deployment",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusGatewayTimeout)
+				w.Write([]byte("gateway timeout"))
+			},
+			expectedError: true,
+			errorContains: "status code 504",
+		},
+		{
+			name: "verifies idempotency header is sent",
+			action: &ActionK8sWaitDeploymentRollout{
+				Deployment: "my-deployment",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				idempotencyId := r.Header.Get("X-Idempotency-Id")
+				if idempotencyId == "" {
+					t.Errorf("expected X-Idempotency-Id header to be set")
+				}
+				// UUID format validation (basic check)
+				if len(idempotencyId) < 32 {
+					t.Errorf("expected X-Idempotency-Id to be a UUID, got %s", idempotencyId)
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{})
+			},
+			expectedError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up test server if handler is provided
+			if tt.serverHandler != nil {
+				server := httptest.NewServer(tt.serverHandler)
+				defer server.Close()
+				tt.action.Member = server.URL
+			}
+
+			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
+
+			if tt.expectedError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("expected error containing %q, got %q", tt.errorContains, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestActionK8sWaitDeploymentRollout_Execute_InvalidEndpoint(t *testing.T) {
+	action := &ActionK8sWaitDeploymentRollout{
+		Member:     "http://invalid-endpoint-that-does-not-exist-12345.local",
+		Deployment: "my-deployment",
+	}
+
+	err := action.Execute(context.Background(), 1, uuid.New().String())
+
+	if err == nil {
+		t.Errorf("expected error for invalid endpoint, got none")
 	}
 }
