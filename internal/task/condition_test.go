@@ -914,6 +914,21 @@ cpu_usage 75.5
 			expectedResult: false,
 			expectedError:  true,
 		},
+		{
+			name: "non-200 status code returns error",
+			condition: &ConditionPrometheusMetric{
+				Endpoint:   "",
+				MetricName: "ues_active",
+				Value:      42,
+				Operator:   "eq",
+			},
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Write([]byte("Service Unavailable"))
+			},
+			expectedResult: false,
+			expectedError:  true,
+		},
 	}
 
 	for _, tt := range tests {
