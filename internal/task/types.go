@@ -24,6 +24,8 @@ const (
 	ActionTypeK8sExecDeployment        ActionType = "k8s_exec_deployment"
 	ActionTypeK8sRestartDeployment     ActionType = "k8s_restart_deployment"
 	ActionTypeK8sWaitDeploymentRollout ActionType = "k8s_wait_deployment_rollout"
+	ActionTypeK8sUpdateConfigMap       ActionType = "k8s_update_configmap"
+	ActionTypeK8sScaleDeployment       ActionType = "k8s_scale_deployment"
 )
 
 type Config struct {
@@ -120,4 +122,21 @@ type ActionK8sWaitDeploymentRollout struct {
 	Deployment string        `yaml:"deployment"`
 	Namespace  string        `yaml:"namespace,omitempty"`
 	Timeout    time.Duration `yaml:"timeout,omitempty"` // Default: 5 minutes
+}
+
+type ActionK8sUpdateConfigMap struct {
+	Type      ActionType `yaml:"type"`
+	Member    string     `yaml:"member"`
+	ConfigMap string     `yaml:"config_map"`
+	Namespace string     `yaml:"namespace,omitempty"`
+	Key       string     `yaml:"key"`
+	Value     string     `yaml:"value"`
+}
+
+type ActionK8sScaleDeployment struct {
+	Type       ActionType `yaml:"type"`
+	Member     string     `yaml:"member"`
+	Deployment string     `yaml:"deployment"`
+	Namespace  string     `yaml:"namespace,omitempty"`
+	Replicas   int32      `yaml:"replicas"`
 }

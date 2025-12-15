@@ -1444,3 +1444,598 @@ func TestActionK8sWaitDeploymentRollout_Execute_InvalidEndpoint(t *testing.T) {
 		t.Errorf("expected error for invalid endpoint, got none")
 	}
 }
+
+func TestActionK8sUpdateConfigMap_GetType(t *testing.T) {
+	action := &ActionK8sUpdateConfigMap{}
+	if action.GetType() != ActionTypeK8sUpdateConfigMap {
+		t.Errorf("expected GetType() to return ActionTypeK8sUpdateConfigMap, got %v", action.GetType())
+	}
+}
+
+func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
+	tests := []struct {
+		name          string
+		action        *ActionK8sUpdateConfigMap
+		epoch         int64
+		serverHandler http.HandlerFunc
+		expectedError bool
+		errorContains string
+	}{
+		{
+			name: "successful update with default namespace",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "my-configmap",
+				Key:       "my-key",
+				Value:     "my-value",
+			},
+			epoch: 123,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "PATCH" {
+					t.Errorf("expected PATCH method, got %s", r.Method)
+				}
+				expectedPath := "/api/v1/configmaps/default/my-configmap"
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+				if r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("expected Content-Type application/json, got %s", r.Header.Get("Content-Type"))
+				}
+				if r.Header.Get("X-Idempotency-Id") == "" {
+					t.Errorf("expected X-Idempotency-Id header to be set")
+				}
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("failed to decode request body: %v", err)
+				}
+				if epoch, ok := body["epoch"].(float64); !ok || epoch != 123 {
+					t.Errorf("expected epoch 123, got %v", body["epoch"])
+				}
+				patch, ok := body["patch"].(map[string]interface{})
+				if !ok {
+					t.Errorf("expected patch in body")
+				}
+				data, ok := patch["data"].(map[string]interface{})
+				if !ok {
+					t.Errorf("expected data in patch")
+				}
+				if value, ok := data["my-key"].(string); !ok || value != "my-value" {
+					t.Errorf("expected data.my-key to be 'my-value', got %v", data["my-key"])
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful update with custom namespace",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "my-configmap",
+				Namespace: "custom-ns",
+				Key:       "config-key",
+				Value:     "config-value",
+			},
+			epoch: 456,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				expectedPath := "/api/v1/configmaps/custom-ns/my-configmap"
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful update with multiline value",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "my-configmap",
+				Key:       "yaml-config",
+				Value:     "- item1\n- item2\n- item3",
+			},
+			epoch: 789,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("failed to decode request body: %v", err)
+				}
+				patch := body["patch"].(map[string]interface{})
+				data := patch["data"].(map[string]interface{})
+				expectedValue := "- item1\n- item2\n- item3"
+				if value, ok := data["yaml-config"].(string); !ok || value != expectedValue {
+					t.Errorf("expected multiline value, got %v", data["yaml-config"])
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful update with empty value",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "my-configmap",
+				Key:       "empty-key",
+				Value:     "",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				json.NewDecoder(r.Body).Decode(&body)
+				patch := body["patch"].(map[string]interface{})
+				data := patch["data"].(map[string]interface{})
+				if value, ok := data["empty-key"].(string); !ok || value != "" {
+					t.Errorf("expected empty value, got %v", data["empty-key"])
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "missing config_map name returns error",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "",
+				Key:       "my-key",
+				Value:     "my-value",
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "config_map name is required",
+		},
+		{
+			name: "missing member returns error",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "my-configmap",
+				Key:       "my-key",
+				Value:     "my-value",
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "member is required",
+		},
+		{
+			name: "missing key returns error",
+			action: &ActionK8sUpdateConfigMap{
+				Member:    "http://localhost:8080",
+				ConfigMap: "my-configmap",
+				Key:       "",
+				Value:     "my-value",
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "key is required",
+		},
+		{
+			name: "HTTP 400 Bad Request returns error",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "my-configmap",
+				Key:       "my-key",
+				Value:     "my-value",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "invalid request",
+					"code":  400,
+				})
+			},
+			expectedError: true,
+			errorContains: "failed to update ConfigMap",
+		},
+		{
+			name: "HTTP 404 Not Found returns error",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "nonexistent",
+				Key:       "my-key",
+				Value:     "my-value",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte("configmap not found"))
+			},
+			expectedError: true,
+			errorContains: "failed to update ConfigMap",
+		},
+		{
+			name: "HTTP 409 Conflict (stale epoch) returns error",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "my-configmap",
+				Key:       "my-key",
+				Value:     "my-value",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "stale epoch",
+					"code":  409,
+				})
+			},
+			expectedError: true,
+			errorContains: "failed to update ConfigMap",
+		},
+		{
+			name: "HTTP 500 Internal Server Error returns error",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "my-configmap",
+				Key:       "my-key",
+				Value:     "my-value",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("internal error"))
+			},
+			expectedError: true,
+			errorContains: "failed to update ConfigMap",
+		},
+		{
+			name: "verifies idempotency header is sent",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "my-configmap",
+				Key:       "my-key",
+				Value:     "my-value",
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				idempotencyId := r.Header.Get("X-Idempotency-Id")
+				if idempotencyId == "" {
+					t.Errorf("expected X-Idempotency-Id header to be set")
+				}
+				// UUID format validation (basic check)
+				if len(idempotencyId) < 32 {
+					t.Errorf("expected X-Idempotency-Id to be a UUID, got %s", idempotencyId)
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "special characters in key and value",
+			action: &ActionK8sUpdateConfigMap{
+				ConfigMap: "my-configmap",
+				Key:       "config.yaml",
+				Value:     `{"key": "value", "nested": {"a": 1}}`,
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				json.NewDecoder(r.Body).Decode(&body)
+				patch := body["patch"].(map[string]interface{})
+				data := patch["data"].(map[string]interface{})
+				expectedValue := `{"key": "value", "nested": {"a": 1}}`
+				if value, ok := data["config.yaml"].(string); !ok || value != expectedValue {
+					t.Errorf("expected JSON value, got %v", data["config.yaml"])
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up test server if handler is provided
+			if tt.serverHandler != nil {
+				server := httptest.NewServer(tt.serverHandler)
+				defer server.Close()
+				tt.action.Member = server.URL
+			}
+
+			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
+
+			if tt.expectedError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("expected error containing %q, got %q", tt.errorContains, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestActionK8sUpdateConfigMap_Execute_InvalidEndpoint(t *testing.T) {
+	action := &ActionK8sUpdateConfigMap{
+		Member:    "http://invalid-endpoint-that-does-not-exist-12345.local",
+		ConfigMap: "my-configmap",
+		Key:       "my-key",
+		Value:     "my-value",
+	}
+
+	err := action.Execute(context.Background(), 1, uuid.New().String())
+
+	if err == nil {
+		t.Errorf("expected error for invalid endpoint, got none")
+	}
+}
+
+func TestActionK8sScaleDeployment_GetType(t *testing.T) {
+	action := &ActionK8sScaleDeployment{}
+	if action.GetType() != ActionTypeK8sScaleDeployment {
+		t.Errorf("expected GetType() to return ActionTypeK8sScaleDeployment, got %v", action.GetType())
+	}
+}
+
+func TestActionK8sScaleDeployment_Execute(t *testing.T) {
+	tests := []struct {
+		name          string
+		action        *ActionK8sScaleDeployment
+		epoch         int64
+		serverHandler http.HandlerFunc
+		expectedError bool
+		errorContains string
+	}{
+		{
+			name: "successful scaling with default namespace",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "my-deployment",
+				Replicas:   3,
+			},
+			epoch: 123,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "PATCH" {
+					t.Errorf("expected PATCH method, got %s", r.Method)
+				}
+				expectedPath := "/api/v1/deployments/default/my-deployment"
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+				if r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("expected Content-Type application/json, got %s", r.Header.Get("Content-Type"))
+				}
+				if r.Header.Get("X-Idempotency-Id") == "" {
+					t.Errorf("expected X-Idempotency-Id header to be set")
+				}
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("failed to decode request body: %v", err)
+				}
+				if epoch, ok := body["epoch"].(float64); !ok || epoch != 123 {
+					t.Errorf("expected epoch 123, got %v", body["epoch"])
+				}
+				patch, ok := body["patch"].(map[string]interface{})
+				if !ok {
+					t.Errorf("expected patch in body")
+				}
+				spec, ok := patch["spec"].(map[string]interface{})
+				if !ok {
+					t.Errorf("expected spec in patch")
+				}
+				if replicas, ok := spec["replicas"].(float64); !ok || replicas != 3 {
+					t.Errorf("expected replicas to be 3, got %v", spec["replicas"])
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful scaling with custom namespace",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "my-deployment",
+				Namespace:  "custom-ns",
+				Replicas:   5,
+			},
+			epoch: 456,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				expectedPath := "/api/v1/deployments/custom-ns/my-deployment"
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+				var body map[string]interface{}
+				json.NewDecoder(r.Body).Decode(&body)
+				patch := body["patch"].(map[string]interface{})
+				spec := patch["spec"].(map[string]interface{})
+				if replicas, ok := spec["replicas"].(float64); !ok || replicas != 5 {
+					t.Errorf("expected replicas to be 5, got %v", spec["replicas"])
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful scaling to zero replicas",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "my-deployment",
+				Replicas:   0,
+			},
+			epoch: 789,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				json.NewDecoder(r.Body).Decode(&body)
+				patch := body["patch"].(map[string]interface{})
+				spec := patch["spec"].(map[string]interface{})
+				if replicas, ok := spec["replicas"].(float64); !ok || replicas != 0 {
+					t.Errorf("expected replicas to be 0, got %v", spec["replicas"])
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful scaling to one replica",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "my-deployment",
+				Replicas:   1,
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				json.NewDecoder(r.Body).Decode(&body)
+				patch := body["patch"].(map[string]interface{})
+				spec := patch["spec"].(map[string]interface{})
+				if replicas, ok := spec["replicas"].(float64); !ok || replicas != 1 {
+					t.Errorf("expected replicas to be 1, got %v", spec["replicas"])
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "successful scaling to many replicas",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "my-deployment",
+				Replicas:   100,
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				json.NewDecoder(r.Body).Decode(&body)
+				patch := body["patch"].(map[string]interface{})
+				spec := patch["spec"].(map[string]interface{})
+				if replicas, ok := spec["replicas"].(float64); !ok || replicas != 100 {
+					t.Errorf("expected replicas to be 100, got %v", spec["replicas"])
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+		{
+			name: "missing deployment name returns error",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "",
+				Replicas:   3,
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "deployment name is required",
+		},
+		{
+			name: "missing member returns error",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "my-deployment",
+				Replicas:   3,
+			},
+			epoch:         1,
+			serverHandler: nil,
+			expectedError: true,
+			errorContains: "member is required",
+		},
+		{
+			name: "HTTP 400 Bad Request returns error",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "my-deployment",
+				Replicas:   3,
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "invalid request",
+					"code":  400,
+				})
+			},
+			expectedError: true,
+			errorContains: "failed to scale deployment",
+		},
+		{
+			name: "HTTP 404 Not Found returns error",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "nonexistent",
+				Replicas:   3,
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte("deployment not found"))
+			},
+			expectedError: true,
+			errorContains: "failed to scale deployment",
+		},
+		{
+			name: "HTTP 409 Conflict (stale epoch) returns error",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "my-deployment",
+				Replicas:   3,
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "stale epoch",
+					"code":  409,
+				})
+			},
+			expectedError: true,
+			errorContains: "failed to scale deployment",
+		},
+		{
+			name: "HTTP 500 Internal Server Error returns error",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "my-deployment",
+				Replicas:   3,
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("internal error"))
+			},
+			expectedError: true,
+			errorContains: "failed to scale deployment",
+		},
+		{
+			name: "verifies idempotency header is sent",
+			action: &ActionK8sScaleDeployment{
+				Deployment: "my-deployment",
+				Replicas:   3,
+			},
+			epoch: 1,
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				idempotencyId := r.Header.Get("X-Idempotency-Id")
+				if idempotencyId == "" {
+					t.Errorf("expected X-Idempotency-Id header to be set")
+				}
+				// UUID format validation (basic check)
+				if len(idempotencyId) < 32 {
+					t.Errorf("expected X-Idempotency-Id to be a UUID, got %s", idempotencyId)
+				}
+				w.WriteHeader(http.StatusOK)
+			},
+			expectedError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up test server if handler is provided
+			if tt.serverHandler != nil {
+				server := httptest.NewServer(tt.serverHandler)
+				defer server.Close()
+				tt.action.Member = server.URL
+			}
+
+			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
+
+			if tt.expectedError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("expected error containing %q, got %q", tt.errorContains, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestActionK8sScaleDeployment_Execute_InvalidEndpoint(t *testing.T) {
+	action := &ActionK8sScaleDeployment{
+		Member:     "http://invalid-endpoint-that-does-not-exist-12345.local",
+		Deployment: "my-deployment",
+		Replicas:   3,
+	}
+
+	err := action.Execute(context.Background(), 1, uuid.New().String())
+
+	if err == nil {
+		t.Errorf("expected error for invalid endpoint, got none")
+	}
+}

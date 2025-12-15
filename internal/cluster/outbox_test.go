@@ -177,7 +177,7 @@ func TestOutbox_AddTask_NewTask(t *testing.T) {
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
 
-	err := outbox.AddTask(testTask)
+	err := outbox.ExecuteTask(testTask)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestOutbox_AddTask_AlreadyExecuting(t *testing.T) {
 	outbox.executingTasks["already-executing-task"] = true
 	outbox.mu.Unlock()
 
-	err := outbox.AddTask(testTask)
+	err := outbox.ExecuteTask(testTask)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestOutbox_AddTask_MultipleSteps(t *testing.T) {
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
 
-	err := outbox.AddTask(testTask)
+	err := outbox.ExecuteTask(testTask)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestOutbox_AddTask_StepError(t *testing.T) {
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
 
-	err := outbox.AddTask(testTask)
+	err := outbox.ExecuteTask(testTask)
 	if err != nil {
 		t.Fatalf("unexpected error adding task: %v", err)
 	}
@@ -478,7 +478,7 @@ func TestOutbox_AddTask_ConcurrentSameTask(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			outbox.AddTask(testTask)
+			outbox.ExecuteTask(testTask)
 		}()
 	}
 
@@ -515,7 +515,7 @@ func TestOutbox_AddTask_EpochMismatch(t *testing.T) {
 	}
 
 	// Adding task should fail silently (epoch mismatch)
-	err = outbox.AddTask(testTask)
+	err = outbox.ExecuteTask(testTask)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -549,7 +549,7 @@ func TestOutbox_FullfillTask_ContextCancellation(t *testing.T) {
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
 
 	// Start the task
-	go outbox.AddTask(testTask)
+	go outbox.ExecuteTask(testTask)
 
 	// Wait for action to start
 	select {
@@ -588,7 +588,7 @@ func TestOutbox_IdempotencyId_Uniqueness(t *testing.T) {
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
-	outbox.AddTask(testTask)
+	outbox.ExecuteTask(testTask)
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -597,7 +597,7 @@ func TestOutbox_IdempotencyId_Uniqueness(t *testing.T) {
 	outbox.executingTasks["idempotency-task"] = false
 	outbox.mu.Unlock()
 
-	outbox.AddTask(testTask)
+	outbox.ExecuteTask(testTask)
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -628,7 +628,7 @@ func TestOutbox_EmptyTask(t *testing.T) {
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
 
-	err := outbox.AddTask(testTask)
+	err := outbox.ExecuteTask(testTask)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -697,7 +697,7 @@ func TestOutbox_Init_ExecutesWhileAddTaskSkips(t *testing.T) {
 
 	// Step 3: While task is executing from init, try to add the same task
 	// This should be skipped because the task is already executing
-	err = outbox.AddTask(testTask)
+	err = outbox.ExecuteTask(testTask)
 	if err != nil {
 		t.Fatalf("unexpected error from AddTask: %v", err)
 	}

@@ -343,7 +343,9 @@ func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, epoch int6
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Idempotency-Id", idempotencyId)
 
-	client := httpclient.Get()
+	// Use long-runner client to allow context timeout to control the request
+	// instead of the default 30s client timeout
+	client := httpclient.GetLongRunner()
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Errorf("ActionK8sWaitDeploymentRollout: failed to execute request to %s: %v", url, err)
@@ -358,5 +360,89 @@ func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, epoch int6
 	}
 
 	logger.Infof("ActionK8sWaitDeploymentRollout: deployment %s/%s rollout completed via %s", namespace, a.Deployment, a.Member)
+	return nil
+}
+
+func (a *ActionK8sUpdateConfigMap) GetType() ActionType {
+	return ActionTypeK8sUpdateConfigMap
+}
+
+func (a *ActionK8sUpdateConfigMap) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+	if a.ConfigMap == "" {
+		err := fmt.Errorf("config_map name is required")
+		logger.Error("ActionK8sUpdateConfigMap: config_map name is required")
+		return err
+	}
+
+	if a.Member == "" {
+		err := fmt.Errorf("member is required")
+		logger.Error("ActionK8sUpdateConfigMap: member is required")
+		return err
+	}
+
+	if a.Key == "" {
+		err := fmt.Errorf("key is required")
+		logger.Error("ActionK8sUpdateConfigMap: key is required")
+		return err
+	}
+
+	namespace := a.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	logger.Infof("Updating ConfigMap %s/%s key %s via %s", namespace, a.ConfigMap, a.Key, a.Member)
+
+	patchData := map[string]interface{}{
+		"data": map[string]string{
+			a.Key: a.Value,
+		},
+	}
+
+	if err := patchResource(ctx, a.Member, "configmaps", namespace, a.ConfigMap, patchData, epoch, idempotencyId); err != nil {
+		logger.Errorf("ActionK8sUpdateConfigMap: failed to update ConfigMap %s/%s via %s: %v", namespace, a.ConfigMap, a.Member, err)
+		return fmt.Errorf("failed to update ConfigMap: %w", err)
+	}
+
+	logger.Infof("Successfully updated ConfigMap %s/%s key %s via %s", namespace, a.ConfigMap, a.Key, a.Member)
+	return nil
+}
+
+func (a *ActionK8sScaleDeployment) GetType() ActionType {
+	return ActionTypeK8sScaleDeployment
+}
+
+func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+	if a.Deployment == "" {
+		err := fmt.Errorf("deployment name is required")
+		logger.Error("ActionK8sScaleDeployment: deployment name is required")
+		return err
+	}
+
+	if a.Member == "" {
+		err := fmt.Errorf("member is required")
+		logger.Error("ActionK8sScaleDeployment: member is required")
+		return err
+	}
+
+	namespace := a.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	logger.Infof("Scaling deployment %s/%s to %d replicas via %s", namespace, a.Deployment, a.Replicas, a.Member)
+
+	patchData := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"replicas": a.Replicas,
+		},
+	}
+
+	if err := patchResource(ctx, a.Member, "deployments", namespace, a.Deployment, patchData, epoch, idempotencyId); err != nil {
+		logger.Errorf("ActionK8sScaleDeployment: failed to scale deployment %s/%s via %s: %v", namespace, a.Deployment, a.Member, err)
+		return fmt.Errorf("failed to scale deployment: %w", err)
+	}
+
+	logger.Infof("Successfully scaled deployment %s/%s to %d replicas via %s", namespace, a.Deployment, a.Replicas, a.Member)
 	return nil
 }
