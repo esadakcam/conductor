@@ -34,6 +34,19 @@ func (c *ConditionEndpointValue) UnmarshalYAML(unmarshal func(interface{}) error
 	return nil
 }
 
+func (c *ConditionPrometheusMetric) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type alias ConditionPrometheusMetric
+	var aux alias
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	*c = ConditionPrometheusMetric(aux)
+	if c.Operator == "" {
+		c.Operator = "eq"
+	}
+	return nil
+}
+
 func (a *ActionEndpoint) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type alias ActionEndpoint
 	var aux alias
@@ -130,6 +143,12 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			condition = &c
 		case ConditionTypeEndpointValue:
 			var c ConditionEndpointValue
+			if err := conditionNode.Decode(&c); err != nil {
+				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
+			}
+			condition = &c
+		case ConditionTypePrometheusMetric:
+			var c ConditionPrometheusMetric
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
 			}

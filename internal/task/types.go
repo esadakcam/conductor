@@ -8,9 +8,10 @@ import (
 type ConditionType string
 
 const (
-	ConditionTypeEndpointSuccess ConditionType = "endpoint_success"
-	ConditionTypeEndpointValue   ConditionType = "endpoint_value"
-	ConditionTypeAlwaysTrue      ConditionType = "always_true"
+	ConditionTypeEndpointSuccess  ConditionType = "endpoint_success"
+	ConditionTypeEndpointValue    ConditionType = "endpoint_value"
+	ConditionTypePrometheusMetric ConditionType = "prometheus_metric"
+	ConditionTypeAlwaysTrue       ConditionType = "always_true"
 )
 
 type ActionType string
@@ -61,6 +62,14 @@ type ConditionEndpointValue struct {
 	Endpoint string        `yaml:"endpoint"`
 	Value    int           `yaml:"value"`
 	Operator string        `yaml:"operator"` // eq, ne, lt, gt, le, ge
+}
+
+type ConditionPrometheusMetric struct {
+	Type       ConditionType `yaml:"type"`
+	Endpoint   string        `yaml:"endpoint"`
+	MetricName string        `yaml:"metric_name"`
+	Value      float64       `yaml:"value"`
+	Operator   string        `yaml:"operator"` // eq, ne, lt, gt, le, ge
 }
 
 type ActionEndpoint struct {
