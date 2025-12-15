@@ -146,6 +146,12 @@ func (c *ConditionPrometheusMetric) Evaluate(ctx context.Context) (bool, error) 
 	}
 	defer resp.Body.Close()
 
+	// Check for successful status code before parsing
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		logger.Errorf("ConditionPrometheusMetric: endpoint %s returned non-success status code: %d", c.Endpoint, resp.StatusCode)
+		return false, fmt.Errorf("endpoint returned non-success status code: %d", resp.StatusCode)
+	}
+
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logger.Errorf("ConditionPrometheusMetric: failed to read response body from %s: %v", c.Endpoint, err)
