@@ -1399,3 +1399,362 @@ func TestClient_ExecDeployment(t *testing.T) {
 		}
 	})
 }
+
+func TestClient_WaitForDeploymentRollout(t *testing.T) {
+	setupTestCluster(t)
+
+	client, err := NewClient(testKubeconfigPath)
+	if err != nil {
+		t.Fatalf("Failed to create K8s client: %v", err)
+	}
+
+	// Verify we're connected to a real cluster
+	verifyClusterConnectivity(t, client)
+
+	ctx := context.Background()
+	ns := setupTestNamespace(t, client)
+	defer cleanupTestNamespace(t, client, ns)
+
+	t.Run("WaitForDeploymentRollout on ready deployment", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-wait-ready-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "wait-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "wait-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Wait for deployment rollout
+		err = client.WaitForDeploymentRollout(ctx, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("WaitForDeploymentRollout failed: %v", err)
+		}
+
+		// Verify deployment is actually ready
+		deployment, err := client.Get(ctx, "deployments", ns, deployName)
+		if err != nil {
+			t.Fatalf("Failed to get deployment: %v", err)
+		}
+
+		replicas, _, _ := unstructured.NestedInt64(deployment.Object, "spec", "replicas")
+		readyReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "readyReplicas")
+		availableReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "availableReplicas")
+
+		if readyReplicas != replicas {
+			t.Errorf("Expected readyReplicas=%d, got %d", replicas, readyReplicas)
+		}
+		if availableReplicas != replicas {
+			t.Errorf("Expected availableReplicas=%d, got %d", replicas, availableReplicas)
+		}
+	})
+
+	t.Run("WaitForDeploymentRollout with multiple replicas", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-wait-multi-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(3),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "wait-multi-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "wait-multi-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Wait for deployment rollout
+		err = client.WaitForDeploymentRollout(ctx, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("WaitForDeploymentRollout failed: %v", err)
+		}
+
+		// Verify all replicas are ready
+		deployment, err := client.Get(ctx, "deployments", ns, deployName)
+		if err != nil {
+			t.Fatalf("Failed to get deployment: %v", err)
+		}
+
+		readyReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "readyReplicas")
+		if readyReplicas != 3 {
+			t.Errorf("Expected 3 readyReplicas, got %d", readyReplicas)
+		}
+	})
+
+	t.Run("WaitForDeploymentRollout after restart", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-wait-restart-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "wait-restart-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "wait-restart-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// First wait for initial deployment
+		err = client.WaitForDeploymentRollout(ctx, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("Initial WaitForDeploymentRollout failed: %v", err)
+		}
+
+		// Trigger a restart by patching the annotation (like kubectl rollout restart)
+		restartPatch := []byte(fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, time.Now().Format(time.RFC3339)))
+		_, err = client.Patch(ctx, "deployments", ns, deployName, types.MergePatchType, restartPatch)
+		if err != nil {
+			t.Fatalf("Failed to patch deployment for restart: %v", err)
+		}
+
+		// Wait for the restart rollout to complete
+		err = client.WaitForDeploymentRollout(ctx, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("WaitForDeploymentRollout after restart failed: %v", err)
+		}
+
+		// Verify deployment is ready
+		deployment, err := client.Get(ctx, "deployments", ns, deployName)
+		if err != nil {
+			t.Fatalf("Failed to get deployment: %v", err)
+		}
+
+		readyReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "readyReplicas")
+		if readyReplicas != 1 {
+			t.Errorf("Expected 1 readyReplica after restart, got %d", readyReplicas)
+		}
+
+		// Verify the annotation was applied
+		annotations, _, _ := unstructured.NestedStringMap(deployment.Object, "spec", "template", "metadata", "annotations")
+		if annotations["kubectl.kubernetes.io/restartedAt"] == "" {
+			t.Error("Expected restartedAt annotation to be set")
+		}
+	})
+
+	t.Run("WaitForDeploymentRollout timeout", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-wait-timeout-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "wait-timeout-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "wait-timeout-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "invalid-image-that-does-not-exist:v999",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// This should timeout because the image doesn't exist
+		err = client.WaitForDeploymentRollout(ctx, ns, deployName, 5*time.Second)
+		if err == nil {
+			t.Error("Expected timeout error")
+		}
+
+		if !strings.Contains(err.Error(), "timed out") {
+			t.Errorf("Expected timeout error, got: %v", err)
+		}
+	})
+
+	t.Run("WaitForDeploymentRollout non-existent deployment", func(t *testing.T) {
+		err := client.WaitForDeploymentRollout(ctx, ns, "non-existent-deployment", 5*time.Second)
+		if err == nil {
+			t.Error("Expected error for non-existent deployment")
+		}
+	})
+
+	t.Run("WaitForDeploymentRollout after scale up", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-wait-scale-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "wait-scale-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "wait-scale-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Wait for initial deployment
+		err = client.WaitForDeploymentRollout(ctx, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("Initial WaitForDeploymentRollout failed: %v", err)
+		}
+
+		// Scale up to 2 replicas
+		scalePatch := []byte(`{"spec":{"replicas":2}}`)
+		_, err = client.Patch(ctx, "deployments", ns, deployName, types.MergePatchType, scalePatch)
+		if err != nil {
+			t.Fatalf("Failed to scale deployment: %v", err)
+		}
+
+		// Wait for scale up to complete
+		err = client.WaitForDeploymentRollout(ctx, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("WaitForDeploymentRollout after scale up failed: %v", err)
+		}
+
+		// Verify we have 2 replicas ready
+		deployment, err := client.Get(ctx, "deployments", ns, deployName)
+		if err != nil {
+			t.Fatalf("Failed to get deployment: %v", err)
+		}
+
+		readyReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "readyReplicas")
+		if readyReplicas != 2 {
+			t.Errorf("Expected 2 readyReplicas after scale up, got %d", readyReplicas)
+		}
+	})
+}

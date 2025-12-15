@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -213,6 +214,80 @@ func (c *Client) Exec(ctx context.Context, namespace, podName, container string,
 		Stdout: stdout.String(),
 		Stderr: stderr.String(),
 	}, nil
+}
+
+// WaitForDeploymentRollout waits for a deployment rollout to complete.
+// Similar to: kubectl rollout status deployment/<name> --timeout=<timeout>
+// Returns nil when the rollout is complete, or an error if it times out or fails.
+func (c *Client) WaitForDeploymentRollout(ctx context.Context, namespace, deploymentName string, timeout time.Duration) error {
+	gvr := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+
+	// Create a context with timeout
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	pollInterval := 2 * time.Second
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			return fmt.Errorf("timed out waiting for deployment %s/%s rollout to complete", namespace, deploymentName)
+		case <-ticker.C:
+			deployment, err := c.client.Resource(gvr).Namespace(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to get deployment %s/%s: %w", namespace, deploymentName, err)
+			}
+
+			complete, err := isDeploymentRolloutComplete(deployment)
+			if err != nil {
+				return fmt.Errorf("failed to check deployment status: %w", err)
+			}
+			if complete {
+				return nil
+			}
+		}
+	}
+}
+
+// isDeploymentRolloutComplete checks if a deployment rollout is complete.
+// A rollout is complete when:
+// - observedGeneration >= generation
+// - updatedReplicas == spec.replicas
+// - replicas == updatedReplicas
+// - availableReplicas == updatedReplicas
+func isDeploymentRolloutComplete(deployment *unstructured.Unstructured) (bool, error) {
+	// Get generation and observedGeneration
+	generation, found, err := unstructured.NestedInt64(deployment.Object, "metadata", "generation")
+	if err != nil || !found {
+		return false, fmt.Errorf("failed to get metadata.generation")
+	}
+
+	observedGeneration, _, _ := unstructured.NestedInt64(deployment.Object, "status", "observedGeneration")
+	if observedGeneration < generation {
+		return false, nil
+	}
+
+	// Get spec.replicas (defaults to 1 if not set)
+	specReplicas, found, _ := unstructured.NestedInt64(deployment.Object, "spec", "replicas")
+	if !found {
+		specReplicas = 1
+	}
+
+	// Get status fields
+	updatedReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "updatedReplicas")
+	replicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "replicas")
+	availableReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "availableReplicas")
+
+	// Check if rollout is complete
+	if updatedReplicas == specReplicas &&
+		replicas == updatedReplicas &&
+		availableReplicas == updatedReplicas {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // ExecDeployment executes a command on all running pods of a deployment.

@@ -16,12 +16,13 @@ const (
 type ActionType string
 
 const (
-	ActionTypeEndpoint             ActionType = "endpoint"
-	ActionTypeEcho                 ActionType = "echo"
-	ActionTypeDelay                ActionType = "delay"
-	ActionTypeConfigValueSum       ActionType = "config_value_sum"
-	ActionTypeK8sExecDeployment    ActionType = "k8s_exec_deployment"
-	ActionTypeK8sRestartDeployment ActionType = "k8s_restart_deployment"
+	ActionTypeEndpoint                 ActionType = "endpoint"
+	ActionTypeEcho                     ActionType = "echo"
+	ActionTypeDelay                    ActionType = "delay"
+	ActionTypeConfigValueSum           ActionType = "config_value_sum"
+	ActionTypeK8sExecDeployment        ActionType = "k8s_exec_deployment"
+	ActionTypeK8sRestartDeployment     ActionType = "k8s_restart_deployment"
+	ActionTypeK8sWaitDeploymentRollout ActionType = "k8s_wait_deployment_rollout"
 )
 
 type Config struct {
@@ -104,4 +105,10 @@ type ActionK8sRestartDeployment struct {
 	Namespace  string     `yaml:"namespace,omitempty"`
 }
 
-// TODO: Add k8s related actions
+type ActionK8sWaitDeploymentRollout struct {
+	Type       ActionType    `yaml:"type"`
+	Member     string        `yaml:"member"`
+	Deployment string        `yaml:"deployment"`
+	Namespace  string        `yaml:"namespace,omitempty"`
+	Timeout    time.Duration `yaml:"timeout,omitempty"` // Default: 5 minutes
+}

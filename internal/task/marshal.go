@@ -3,6 +3,7 @@ package task
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -77,6 +78,22 @@ func (a *ActionK8sRestartDeployment) UnmarshalYAML(unmarshal func(interface{}) e
 	*a = ActionK8sRestartDeployment(aux)
 	if a.Namespace == "" {
 		a.Namespace = "default"
+	}
+	return nil
+}
+
+func (a *ActionK8sWaitDeploymentRollout) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type alias ActionK8sWaitDeploymentRollout
+	var aux alias
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	*a = ActionK8sWaitDeploymentRollout(aux)
+	if a.Namespace == "" {
+		a.Namespace = "default"
+	}
+	if a.Timeout == 0 {
+		a.Timeout = 5 * time.Minute
 	}
 	return nil
 }
@@ -172,6 +189,12 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			action = &a
 		case ActionTypeK8sRestartDeployment:
 			var a ActionK8sRestartDeployment
+			if err := actionNode.Decode(&a); err != nil {
+				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
+			}
+			action = &a
+		case ActionTypeK8sWaitDeploymentRollout:
+			var a ActionK8sWaitDeploymentRollout
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
