@@ -226,6 +226,29 @@ func (c *Client) WaitForDeploymentRollout(ctx context.Context, namespace, deploy
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// Helper function to check deployment status
+	checkDeployment := func() (bool, error) {
+		deployment, err := c.client.Resource(gvr).Namespace(namespace).Get(timeoutCtx, deploymentName, metav1.GetOptions{})
+		if err != nil {
+			return false, fmt.Errorf("failed to get deployment %s/%s: %w", namespace, deploymentName, err)
+		}
+
+		complete, err := isDeploymentRolloutComplete(deployment)
+		if err != nil {
+			return false, fmt.Errorf("failed to check deployment status: %w", err)
+		}
+		return complete, nil
+	}
+
+	// Perform initial check immediately before polling
+	complete, err := checkDeployment()
+	if err != nil {
+		return err
+	}
+	if complete {
+		return nil
+	}
+
 	pollInterval := 2 * time.Second
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
@@ -235,14 +258,9 @@ func (c *Client) WaitForDeploymentRollout(ctx context.Context, namespace, deploy
 		case <-timeoutCtx.Done():
 			return fmt.Errorf("timed out waiting for deployment %s/%s rollout to complete", namespace, deploymentName)
 		case <-ticker.C:
-			deployment, err := c.client.Resource(gvr).Namespace(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+			complete, err := checkDeployment()
 			if err != nil {
-				return fmt.Errorf("failed to get deployment %s/%s: %w", namespace, deploymentName, err)
-			}
-
-			complete, err := isDeploymentRolloutComplete(deployment)
-			if err != nil {
-				return fmt.Errorf("failed to check deployment status: %w", err)
+				return err
 			}
 			if complete {
 				return nil
@@ -256,6 +274,7 @@ func (c *Client) WaitForDeploymentRollout(ctx context.Context, namespace, deploy
 // - observedGeneration >= generation
 // - updatedReplicas == spec.replicas
 // - replicas == updatedReplicas
+// - readyReplicas == updatedReplicas
 // - availableReplicas == updatedReplicas
 func isDeploymentRolloutComplete(deployment *unstructured.Unstructured) (bool, error) {
 	// Get generation and observedGeneration
@@ -278,11 +297,13 @@ func isDeploymentRolloutComplete(deployment *unstructured.Unstructured) (bool, e
 	// Get status fields
 	updatedReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "updatedReplicas")
 	replicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "replicas")
+	readyReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "readyReplicas")
 	availableReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "availableReplicas")
 
 	// Check if rollout is complete
 	if updatedReplicas == specReplicas &&
 		replicas == updatedReplicas &&
+		readyReplicas == updatedReplicas &&
 		availableReplicas == updatedReplicas {
 		return true, nil
 	}
