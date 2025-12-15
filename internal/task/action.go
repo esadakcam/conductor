@@ -287,3 +287,76 @@ func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, epoch int64, i
 	logger.Infof("successfully restarted deployment %s/%s via %s", namespace, a.Deployment, a.Member)
 	return nil
 }
+
+func (a *ActionK8sWaitDeploymentRollout) GetType() ActionType {
+	return ActionTypeK8sWaitDeploymentRollout
+}
+
+func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+	if a.Deployment == "" {
+		err := fmt.Errorf("deployment name is required")
+		logger.Error("ActionK8sWaitDeploymentRollout: deployment name is required")
+		return err
+	}
+
+	if a.Member == "" {
+		err := fmt.Errorf("member is required")
+		logger.Error("ActionK8sWaitDeploymentRollout: member is required")
+		return err
+	}
+
+	namespace := a.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	timeout := a.Timeout
+	if timeout == 0 {
+		timeout = 5 * time.Minute
+	}
+
+	logger.Infof("Waiting for deployment %s/%s rollout via %s (timeout: %s)", namespace, a.Deployment, a.Member, timeout)
+
+	// Build request payload
+	reqPayload := map[string]interface{}{
+		"epoch":   epoch,
+		"timeout": timeout.String(),
+	}
+
+	reqBody, err := json.Marshal(reqPayload)
+	if err != nil {
+		logger.Errorf("ActionK8sWaitDeploymentRollout: failed to marshal request payload: %v", err)
+		return fmt.Errorf("failed to marshal request payload: %w", err)
+	}
+
+	// Create context with timeout for the HTTP request (add buffer for network)
+	httpCtx, cancel := context.WithTimeout(ctx, timeout+30*time.Second)
+	defer cancel()
+
+	// Make POST request to member
+	url := fmt.Sprintf("%s/api/v1/rollout/deployments/%s/%s", a.Member, namespace, a.Deployment)
+	req, err := http.NewRequestWithContext(httpCtx, "POST", url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		logger.Errorf("ActionK8sWaitDeploymentRollout: failed to create request to %s: %v", url, err)
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Idempotency-Id", idempotencyId)
+
+	client := httpclient.Get()
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Errorf("ActionK8sWaitDeploymentRollout: failed to execute request to %s: %v", url, err)
+		return fmt.Errorf("failed to execute request to %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		logger.Errorf("ActionK8sWaitDeploymentRollout: request to %s failed with status %d: %s", url, resp.StatusCode, string(bodyBytes))
+		return fmt.Errorf("wait rollout request failed with status code %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	logger.Infof("ActionK8sWaitDeploymentRollout: deployment %s/%s rollout completed via %s", namespace, a.Deployment, a.Member)
+	return nil
+}

@@ -34,13 +34,14 @@ func (m *MockValidator) Validate(ctx context.Context, toValidate any) (bool, err
 
 // MockKubernetesClient satisfies KubernetesClient interface for unit tests
 type MockKubernetesClient struct {
-	GetFunc            func(ctx context.Context, resource, namespace, name string) (*unstructured.Unstructured, error)
-	ListFunc           func(ctx context.Context, resource, namespace string) (*unstructured.UnstructuredList, error)
-	CreateFunc         func(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error)
-	UpdateFunc         func(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error)
-	PatchFunc          func(ctx context.Context, resource, namespace, name string, pt types.PatchType, data []byte) (*unstructured.Unstructured, error)
-	DeleteFunc         func(ctx context.Context, resource, namespace, name string) error
-	ExecDeploymentFunc func(ctx context.Context, namespace, deploymentName, container string, command []string) ([]k8s.PodExecResult, error)
+	GetFunc                      func(ctx context.Context, resource, namespace, name string) (*unstructured.Unstructured, error)
+	ListFunc                     func(ctx context.Context, resource, namespace string) (*unstructured.UnstructuredList, error)
+	CreateFunc                   func(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error)
+	UpdateFunc                   func(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error)
+	PatchFunc                    func(ctx context.Context, resource, namespace, name string, pt types.PatchType, data []byte) (*unstructured.Unstructured, error)
+	DeleteFunc                   func(ctx context.Context, resource, namespace, name string) error
+	ExecDeploymentFunc           func(ctx context.Context, namespace, deploymentName, container string, command []string) ([]k8s.PodExecResult, error)
+	WaitForDeploymentRolloutFunc func(ctx context.Context, namespace, deploymentName string, timeout time.Duration) error
 }
 
 func (m *MockKubernetesClient) Get(ctx context.Context, resource, namespace, name string) (*unstructured.Unstructured, error) {
@@ -90,6 +91,13 @@ func (m *MockKubernetesClient) ExecDeployment(ctx context.Context, namespace, de
 		return m.ExecDeploymentFunc(ctx, namespace, deploymentName, container, command)
 	}
 	return []k8s.PodExecResult{}, nil
+}
+
+func (m *MockKubernetesClient) WaitForDeploymentRollout(ctx context.Context, namespace, deploymentName string, timeout time.Duration) error {
+	if m.WaitForDeploymentRolloutFunc != nil {
+		return m.WaitForDeploymentRolloutFunc(ctx, namespace, deploymentName, timeout)
+	}
+	return nil
 }
 
 var (

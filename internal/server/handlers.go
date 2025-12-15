@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/esadakcam/conductor/internal/logger"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -326,6 +327,59 @@ func (h *Handler) HandleExecDeployment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Infof("Successfully executed command on deployment %s/%s (epoch: %d, pods: %d)", namespace, name, req.Epoch, len(results))
+	h.sendJSON(w, http.StatusOK, response)
+}
+
+// HandleWaitDeploymentRollout handles POST /api/v1/rollout/deployments/{namespace}/{name}
+// Waits for a deployment rollout to complete
+func (h *Handler) HandleWaitDeploymentRollout(w http.ResponseWriter, r *http.Request) {
+	idempotencyId, valid := h.validateIdempotency(w, r)
+	if !valid {
+		return
+	}
+
+	namespace := r.PathValue("namespace")
+	name := r.PathValue("name")
+
+	var req WaitDeploymentRolloutRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Warnf("Invalid request body for wait rollout deployment %s/%s: %v", namespace, name, err)
+		h.sendError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if !h.validateEpoch(w, r.Context(), req.Epoch, fmt.Sprintf("wait rollout deployment %s/%s", namespace, name)) {
+		return
+	}
+
+	// Parse timeout duration (default: 5 minutes)
+	timeout := 5 * time.Minute
+	if req.Timeout != "" {
+		parsed, err := time.ParseDuration(req.Timeout)
+		if err != nil {
+			logger.Warnf("Invalid timeout format for wait rollout deployment %s/%s: %v", namespace, name, err)
+			h.sendError(w, http.StatusBadRequest, "invalid timeout format")
+			return
+		}
+		timeout = parsed
+	}
+
+	err := h.k8sClient.WaitForDeploymentRollout(r.Context(), namespace, name, timeout)
+	if err != nil {
+		logger.Errorf("Failed to wait for rollout of deployment %s/%s: %v", namespace, name, err)
+		h.sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.storeIdempotencyKey(r.Context(), idempotencyId, req.Epoch)
+
+	response := WaitDeploymentRolloutResponse{
+		DeploymentName: name,
+		Namespace:      namespace,
+		Status:         "completed",
+	}
+
+	logger.Infof("Successfully waited for deployment rollout %s/%s (epoch: %d)", namespace, name, req.Epoch)
 	h.sendJSON(w, http.StatusOK, response)
 }
 

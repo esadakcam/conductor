@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"time"
 
 	"github.com/esadakcam/conductor/internal/k8s"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -17,6 +18,7 @@ type KubernetesClient interface {
 	Patch(ctx context.Context, resource, namespace, name string, pt types.PatchType, data []byte) (*unstructured.Unstructured, error)
 	Delete(ctx context.Context, resource, namespace, name string) error
 	ExecDeployment(ctx context.Context, namespace, deploymentName, container string, command []string) ([]k8s.PodExecResult, error)
+	WaitForDeploymentRollout(ctx context.Context, namespace, deploymentName string, timeout time.Duration) error
 }
 
 type Validator interface {

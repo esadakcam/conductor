@@ -37,6 +37,9 @@ func NewServer(cfg Config, handler *Handler) *Server {
 	// Exec Operations
 	mux.HandleFunc("POST /api/v1/exec/deployments/{namespace}/{name}", handler.HandleExecDeployment)
 
+	// Rollout Operations
+	mux.HandleFunc("POST /api/v1/rollout/deployments/{namespace}/{name}", handler.HandleWaitDeploymentRollout)
+
 	return &Server{
 		server: &http.Server{
 			Addr:    fmt.Sprintf(":%d", cfg.Port),

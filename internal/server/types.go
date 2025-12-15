@@ -48,6 +48,19 @@ type ExecDeploymentRequest struct {
 	Command   []string `json:"command"`             // Command to execute
 }
 
+// WaitDeploymentRolloutRequest wraps the wait rollout request payload
+type WaitDeploymentRolloutRequest struct {
+	Epoch   int64  `json:"epoch"`
+	Timeout string `json:"timeout,omitempty"` // Timeout duration string (e.g., "5m"), default: 5 minutes
+}
+
+// WaitDeploymentRolloutResponse contains the result of waiting for rollout
+type WaitDeploymentRolloutResponse struct {
+	DeploymentName string `json:"deploymentName"`
+	Namespace      string `json:"namespace"`
+	Status         string `json:"status"` // "completed" or error message
+}
+
 // ExecDeploymentResponse contains the results of exec on all pods
 type ExecDeploymentResponse struct {
 	DeploymentName string              `json:"deploymentName"`
