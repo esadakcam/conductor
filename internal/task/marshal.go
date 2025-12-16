@@ -47,6 +47,19 @@ func (c *ConditionPrometheusMetric) UnmarshalYAML(unmarshal func(interface{}) er
 	return nil
 }
 
+func (c *ConditionK8sDeploymentReady) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type alias ConditionK8sDeploymentReady
+	var aux alias
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	*c = ConditionK8sDeploymentReady(aux)
+	if c.Namespace == "" {
+		c.Namespace = "default"
+	}
+	return nil
+}
+
 func (a *ActionEndpoint) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type alias ActionEndpoint
 	var aux alias
@@ -181,6 +194,12 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			condition = &c
 		case ConditionTypeAlwaysTrue:
 			var c ConditionAlwaysTrue
+			if err := conditionNode.Decode(&c); err != nil {
+				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
+			}
+			condition = &c
+		case ConditionTypeK8sDeploymentReady:
+			var c ConditionK8sDeploymentReady
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
 			}

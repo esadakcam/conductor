@@ -8,10 +8,11 @@ import (
 type ConditionType string
 
 const (
-	ConditionTypeEndpointSuccess  ConditionType = "endpoint_success"
-	ConditionTypeEndpointValue    ConditionType = "endpoint_value"
-	ConditionTypePrometheusMetric ConditionType = "prometheus_metric"
-	ConditionTypeAlwaysTrue       ConditionType = "always_true"
+	ConditionTypeEndpointSuccess    ConditionType = "endpoint_success"
+	ConditionTypeEndpointValue      ConditionType = "endpoint_value"
+	ConditionTypePrometheusMetric   ConditionType = "prometheus_metric"
+	ConditionTypeAlwaysTrue         ConditionType = "always_true"
+	ConditionTypeK8sDeploymentReady ConditionType = "k8s_deployment_ready"
 )
 
 type ActionType string
@@ -72,6 +73,14 @@ type ConditionPrometheusMetric struct {
 	MetricName string        `yaml:"metric_name"`
 	Value      float64       `yaml:"value"`
 	Operator   string        `yaml:"operator"` // eq, ne, lt, gt, le, ge
+}
+
+type ConditionK8sDeploymentReady struct {
+	Type       ConditionType `yaml:"type"`
+	Member     string        `yaml:"member"`
+	Deployment string        `yaml:"deployment"`
+	Namespace  string        `yaml:"namespace,omitempty"`
+	Replicas   int32         `yaml:"replicas"`
 }
 
 type ActionEndpoint struct {

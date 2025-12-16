@@ -37,6 +37,7 @@ func watch(ctx context.Context, task task.Task, outbox *Outbox) {
 
 			// Evaluate all conditions (AND logic)
 			allConditionsMet := true
+			// TODO: Parallelize condition evaluation
 			for i, condition := range task.When {
 				result, err := condition.Evaluate(ctx)
 				if err != nil {

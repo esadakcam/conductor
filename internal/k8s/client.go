@@ -233,7 +233,7 @@ func (c *Client) WaitForDeploymentRollout(ctx context.Context, namespace, deploy
 			return false, fmt.Errorf("failed to get deployment %s/%s: %w", namespace, deploymentName, err)
 		}
 
-		complete, err := isDeploymentRolloutComplete(deployment)
+		complete, err := IsDeploymentReady(deployment.Object, nil)
 		if err != nil {
 			return false, fmt.Errorf("failed to check deployment status: %w", err)
 		}
@@ -269,47 +269,6 @@ func (c *Client) WaitForDeploymentRollout(ctx context.Context, namespace, deploy
 	}
 }
 
-// isDeploymentRolloutComplete checks if a deployment rollout is complete.
-// A rollout is complete when:
-// - observedGeneration >= generation
-// - updatedReplicas == spec.replicas
-// - replicas == updatedReplicas
-// - readyReplicas == updatedReplicas
-// - availableReplicas == updatedReplicas
-func isDeploymentRolloutComplete(deployment *unstructured.Unstructured) (bool, error) {
-	// Get generation and observedGeneration
-	generation, found, err := unstructured.NestedInt64(deployment.Object, "metadata", "generation")
-	if err != nil || !found {
-		return false, fmt.Errorf("failed to get metadata.generation")
-	}
-
-	observedGeneration, _, _ := unstructured.NestedInt64(deployment.Object, "status", "observedGeneration")
-	if observedGeneration < generation {
-		return false, nil
-	}
-
-	// Get spec.replicas (defaults to 1 if not set)
-	specReplicas, found, _ := unstructured.NestedInt64(deployment.Object, "spec", "replicas")
-	if !found {
-		specReplicas = 1
-	}
-
-	// Get status fields
-	updatedReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "updatedReplicas")
-	replicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "replicas")
-	readyReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "readyReplicas")
-	availableReplicas, _, _ := unstructured.NestedInt64(deployment.Object, "status", "availableReplicas")
-
-	// Check if rollout is complete
-	if updatedReplicas == specReplicas &&
-		replicas == updatedReplicas &&
-		readyReplicas == updatedReplicas &&
-		availableReplicas == updatedReplicas {
-		return true, nil
-	}
-
-	return false, nil
-}
 
 // ExecDeployment executes a command on all running pods of a deployment.
 // If container is empty, it uses the first container in each pod.

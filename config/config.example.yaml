@@ -16,8 +16,8 @@ tasks:
     when:
     - type: "endpoint_value"
       endpoint: "http://192.168.1.115:8000"
-      value: 15
-      operator: ne
+      value: 1
+      operator: eq
     - type: "prometheus_metric" # cluster 1 usage
       endpoint: "http://192.168.1.111:30092/metrics"
       metric_name: "ues_active"
@@ -82,40 +82,94 @@ tasks:
       deployment: "upf"
       namespace: "open5gs"
       replicas: 0
-  # Scale up cluster 1 and remove delegation
-  # - when:
-  #   - type: "configmap_value"
-  #     key: "tac"
-  #     value: "cluster1 tac"
-  #     operator: "contains"
-  #   - type: "time"
-  #     operator: "later"
-  #     value: 06.00
-  #   - type: "time"
-  #     operator: "before"
-  #     value: 22.00
-  #   then:
-  #   - type: "k8s_update_configmap"
-  #     config_map: "amf"
-  #     member: "https://cluster2:8080"
-  #     key: "tac"
-  #     value: |
-  #       - cluster2 tac
-  #     onChange:
-  #       - type: "deployment_restart" 
-  #         deployment: "amf"
-  #   - type: "k8s_update_configmap"
-  #     config_map: "gnb"
-  #     member: "https://cluster1:8080"
-  #     key: "amf_list"
-  #     value: |
-  #       - cluster1
-  #     onChange:
-  #       - type: "deployment_restart" 
-  #         deployment: "gnb"
-  #   - type: "scale_deployment"
-  #     selector: "open5gs"
-  #     value: 1
+
+  - name: "Scale up cluster 1 and remove tac 1 from cluster 2"
+    when:
+    - type: "endpoint_value"
+      endpoint: "http://192.168.1.115:8000"
+      value: 2
+      operator: eq
+    - type: "k8s_deployment_ready"
+      member: "http://192.168.1.111:8080"
+      deployment: "amf"
+      namespace: "open5gs"
+      replicas: 0
+    - type: "k8s_deployment_ready"
+      member: "http://192.168.1.111:8080"
+      deployment: "upf"
+      namespace: "open5gs"
+      replicas: 0
+    - type: "k8s_deployment_ready"
+      member: "http://192.168.1.111:8080"
+      deployment: "smf"
+      namespace: "open5gs"
+      replicas: 0
+    then:
+    - type: "k8s_scale_deployment"
+      member: "http://192.168.1.111:8080"
+      deployment: "amf"
+      namespace: "open5gs"
+      replicas: 1
+    - type: "k8s_scale_deployment"
+      member: "http://192.168.1.111:8080"
+      deployment: "smf"
+      namespace: "open5gs"
+      replicas: 1
+    - type: "k8s_scale_deployment"
+      member: "http://192.168.1.111:8080"
+      deployment: "upf"
+      namespace: "open5gs"
+      replicas: 1
+    - type: "k8s_wait_deployment_rollout"
+      member: "http://192.168.1.111:8080"
+      deployment: "amf"
+      namespace: "open5gs"
+    - type: "k8s_wait_deployment_rollout"
+      member: "http://192.168.1.111:8080"
+      deployment: "smf"
+      namespace: "open5gs"
+    - type: "k8s_wait_deployment_rollout"
+      member: "http://192.168.1.111:8080"
+      deployment: "upf"
+      namespace: "open5gs"
+    - type: "k8s_update_configmap"
+      config_map: "gnb-config"
+      member: "http://192.168.1.114:8080"
+      namespace: "open5gs"
+      key: "tac"
+      value: "0001"
+    - type: "k8s_update_configmap"
+      config_map: "gnb-config"
+      member: "http://192.168.1.114:8080"
+      namespace: "open5gs"
+      key: "amfIp"
+      value: "192.168.1.111"
+    - type: "k8s_exec_deployment"
+      member: "http://192.168.1.114:8080"
+      deployment: "gnb"
+      namespace: "open5gs"
+      command: ["nr-cli", "UERANSIM-gnb-999-70-16", "-e", "'ue-release 1'"]
+    - type: "k8s_exec_deployment"
+      member: "http://192.168.1.114:8080"
+      deployment: "ue"
+      namespace: "open5gs"
+      command: ["nr-cli", "imsi-999700000000001", "--exec", "'ps-release-all'"]
+    - type: "k8s_restart_deployment"
+      member: "http://192.168.1.114:8080"
+      deployment: "gnb"
+      namespace: "open5gs"
+    - type: "k8s_wait_deployment_rollout"
+      member: "http://192.168.1.114:8080"
+      deployment: "gnb"
+      namespace: "open5gs"
+    - type: "k8s_restart_deployment"
+      member: "http://192.168.1.114:8080"
+      deployment: "ue"
+      namespace: "open5gs"
+    - type: "k8s_wait_deployment_rollout"
+      member: "http://192.168.1.114:8080"
+      deployment: "ue"
+      namespace: "open5gs"
       
   # - name: nginx-data value sum accross members is 30
   #   when:
