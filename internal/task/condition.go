@@ -276,7 +276,6 @@ func (c *ConditionK8sDeploymentReady) Evaluate(ctx context.Context) (bool, error
 	return k8s.IsDeploymentReady(deployment, &c.Replicas)
 }
 
-
 func (c *ConditionEndpointSuccess) GetType() ConditionType {
 	return ConditionTypeEndpointSuccess
 }

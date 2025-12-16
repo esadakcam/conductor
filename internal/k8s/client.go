@@ -269,7 +269,6 @@ func (c *Client) WaitForDeploymentRollout(ctx context.Context, namespace, deploy
 	}
 }
 
-
 // ExecDeployment executes a command on all running pods of a deployment.
 // If container is empty, it uses the first container in each pod.
 // Returns results for each pod, including any errors encountered.

@@ -1405,4 +1405,3 @@ func TestConditionK8sDeploymentReady_GetType(t *testing.T) {
 		t.Errorf("expected type %v, got %v", ConditionTypeK8sDeploymentReady, condition.GetType())
 	}
 }
-
