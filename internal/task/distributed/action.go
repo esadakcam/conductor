@@ -1,4 +1,4 @@
-package task
+package distributed
 
 import (
 	"bytes"
@@ -11,15 +11,16 @@ import (
 	"time"
 
 	"github.com/esadakcam/conductor/internal/logger"
+	"github.com/esadakcam/conductor/internal/task"
 	"github.com/esadakcam/conductor/internal/utils/httpclient"
 )
 
-func (a *ActionEndpoint) GetType() ActionType {
-	return ActionTypeEndpoint
+func (a *ActionEndpoint) GetType() task.ActionType {
+	return task.ActionTypeEndpoint
 }
 
 func (a *ActionEndpoint) Execute(ctx context.Context, payload any) error {
-	_, idempotencyId, err := getPayload(payload)
+	_, idempotencyId, err := GetPayload(payload)
 	if err != nil {
 		logger.Errorf("ActionEndpoint: failed to get payload: %v", err)
 		return fmt.Errorf("failed to get payload: %w", err)
@@ -80,8 +81,8 @@ func (a *ActionEndpoint) Execute(ctx context.Context, payload any) error {
 	return nil
 }
 
-func (a *ActionEcho) GetType() ActionType {
-	return ActionTypeEcho
+func (a *ActionEcho) GetType() task.ActionType {
+	return task.ActionTypeEcho
 }
 
 func (a *ActionEcho) Execute(ctx context.Context, payload any) error {
@@ -89,8 +90,8 @@ func (a *ActionEcho) Execute(ctx context.Context, payload any) error {
 	return nil
 }
 
-func (a *ActionDelay) GetType() ActionType {
-	return ActionTypeDelay
+func (a *ActionDelay) GetType() task.ActionType {
+	return task.ActionTypeDelay
 }
 
 func (a *ActionDelay) Execute(ctx context.Context, payload any) error {
@@ -103,12 +104,12 @@ func (a *ActionDelay) Execute(ctx context.Context, payload any) error {
 	}
 }
 
-func (a *ActionConfigValueSum) GetType() ActionType {
-	return ActionTypeConfigValueSum
+func (a *ActionConfigValueSum) GetType() task.ActionType {
+	return task.ActionTypeConfigValueSum
 }
 
 func (a *ActionConfigValueSum) Execute(ctx context.Context, payload any) error {
-	epoch, idempotencyId, err := getPayload(payload)
+	epoch, idempotencyId, err := GetPayload(payload)
 	if err != nil {
 		logger.Errorf("ActionConfigValueSum: failed to get payload: %v", err)
 		return fmt.Errorf("failed to get payload: %w", err)
@@ -128,12 +129,12 @@ func (a *ActionConfigValueSum) Execute(ctx context.Context, payload any) error {
 	return a.distributeAndApplyChanges(ctx, curSumMap, epoch, idempotencyId)
 }
 
-func (a *ActionK8sExecDeployment) GetType() ActionType {
-	return ActionTypeK8sExecDeployment
+func (a *ActionK8sExecDeployment) GetType() task.ActionType {
+	return task.ActionTypeK8sExecDeployment
 }
 
 func (a *ActionK8sExecDeployment) Execute(ctx context.Context, payload any) error {
-	epoch, idempotencyId, err := getPayload(payload)
+	epoch, idempotencyId, err := GetPayload(payload)
 
 	if err != nil {
 		logger.Errorf("ActionK8sExecDeployment: failed to get payload: %v", err)
@@ -262,12 +263,12 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, cu
 	return nil
 }
 
-func (a *ActionK8sRestartDeployment) GetType() ActionType {
-	return ActionTypeK8sRestartDeployment
+func (a *ActionK8sRestartDeployment) GetType() task.ActionType {
+	return task.ActionTypeK8sRestartDeployment
 }
 
 func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, payload any) error {
-	epoch, idempotencyId, err := getPayload(payload)
+	epoch, idempotencyId, err := GetPayload(payload)
 	if err != nil {
 		logger.Errorf("ActionK8sRestartDeployment: failed to get payload: %v", err)
 		return fmt.Errorf("failed to get payload: %w", err)
@@ -311,12 +312,12 @@ func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, payload any) e
 	return nil
 }
 
-func (a *ActionK8sWaitDeploymentRollout) GetType() ActionType {
-	return ActionTypeK8sWaitDeploymentRollout
+func (a *ActionK8sWaitDeploymentRollout) GetType() task.ActionType {
+	return task.ActionTypeK8sWaitDeploymentRollout
 }
 
 func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, payload any) error {
-	epoch, idempotencyId, err := getPayload(payload)
+	epoch, idempotencyId, err := GetPayload(payload)
 	if err != nil {
 		logger.Errorf("ActionK8sWaitDeploymentRollout: failed to get payload: %v", err)
 		return fmt.Errorf("failed to get payload: %w", err)
@@ -392,12 +393,12 @@ func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, payload an
 	return nil
 }
 
-func (a *ActionK8sUpdateConfigMap) GetType() ActionType {
-	return ActionTypeK8sUpdateConfigMap
+func (a *ActionK8sUpdateConfigMap) GetType() task.ActionType {
+	return task.ActionTypeK8sUpdateConfigMap
 }
 
 func (a *ActionK8sUpdateConfigMap) Execute(ctx context.Context, payload any) error {
-	epoch, idempotencyId, err := getPayload(payload)
+	epoch, idempotencyId, err := GetPayload(payload)
 	if err != nil {
 		logger.Errorf("ActionK8sUpdateConfigMap: failed to get payload: %v", err)
 		return fmt.Errorf("failed to get payload: %w", err)
@@ -443,12 +444,12 @@ func (a *ActionK8sUpdateConfigMap) Execute(ctx context.Context, payload any) err
 	return nil
 }
 
-func (a *ActionK8sScaleDeployment) GetType() ActionType {
-	return ActionTypeK8sScaleDeployment
+func (a *ActionK8sScaleDeployment) GetType() task.ActionType {
+	return task.ActionTypeK8sScaleDeployment
 }
 
 func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, payload any) error {
-	epoch, idempotencyId, err := getPayload(payload)
+	epoch, idempotencyId, err := GetPayload(payload)
 	if err != nil {
 		logger.Errorf("ActionK8sScaleDeployment: failed to get payload: %v", err)
 		return fmt.Errorf("failed to get payload: %w", err)
@@ -489,7 +490,7 @@ func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, payload any) err
 }
 
 // Returns epoch and idempotencyId from payload
-func getPayload(payload any) (int64, string, error) {
+func GetPayload(payload any) (int64, string, error) {
 	data, ok := payload.(map[string]any)
 	if !ok {
 		return 0, "", fmt.Errorf("invalid payload format")

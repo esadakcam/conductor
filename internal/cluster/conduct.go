@@ -24,24 +24,24 @@ func Conduct(ctx context.Context, tasks []task.Task, outbox *Outbox) {
 }
 
 func watch(ctx context.Context, task task.Task, outbox *Outbox) {
-	logger.Infof("Watching task %s", task.Name)
+	logger.Infof("Watching task %s", task.GetName())
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(watchInterval):
-			if outbox.IsTaskExecuting(ctx, task.Name) {
-				logger.Infof("Task %s is already executing, skipping", task.Name)
+			if outbox.IsTaskExecuting(ctx, task.GetName()) {
+				logger.Infof("Task %s is already executing, skipping", task.GetName())
 				continue
 			}
 
 			// Evaluate all conditions (AND logic)
 			allConditionsMet := true
 			// TODO: Parallelize condition evaluation
-			for i, condition := range task.When {
+			for i, condition := range task.GetConditions() {
 				result, err := condition.Evaluate(ctx)
 				if err != nil {
-					logger.Errorf("Error evaluating condition %d for task %s: %v", i, task.Name, err)
+					logger.Errorf("Error evaluating condition %d for task %s: %v", i, task.GetName(), err)
 					allConditionsMet = false
 					break
 				}
@@ -52,13 +52,13 @@ func watch(ctx context.Context, task task.Task, outbox *Outbox) {
 			}
 
 			if allConditionsMet {
-				logger.Infof("All conditions met, executing actions for task %s", task.Name)
+				logger.Infof("All conditions met, executing actions for task %s", task.GetName())
 				err := outbox.ExecuteTask(task)
 				if err != nil {
-					logger.Errorf("Error adding task %s to outbox: %v", task.Name, err)
+					logger.Errorf("Error adding task %s to outbox: %v", task.GetName(), err)
 					continue
 				}
-				logger.Infof("Task %s executed", task.Name)
+				logger.Infof("Task %s executed", task.GetName())
 				continue
 			}
 		}

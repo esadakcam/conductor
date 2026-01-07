@@ -1,10 +1,11 @@
-package task
+package distributed
 
 import (
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/esadakcam/conductor/internal/task"
 	"gopkg.in/yaml.v3"
 )
 
@@ -75,11 +76,11 @@ func (a *ActionEndpoint) UnmarshalYAML(unmarshal func(interface{}) error) error 
 
 func (a *ActionConfigValueSum) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var actionNode struct {
-		Type          ActionType `yaml:"type"`
-		ConfigMapName string     `yaml:"config_map"`
-		Key           string     `yaml:"key"`
-		Sum           int        `yaml:"sum"`
-		Members       []string   `yaml:"members"`
+		Type          task.ActionType `yaml:"type"`
+		ConfigMapName string          `yaml:"config_map"`
+		Key           string          `yaml:"key"`
+		Sum           int             `yaml:"sum"`
+		Members       []string        `yaml:"members"`
 	}
 
 	if err := unmarshal(&actionNode); err != nil {
@@ -163,42 +164,42 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	t.Name = taskNode.Name
 
-	t.When = make([]Condition, 0, len(taskNode.When))
+	t.When = make([]task.Condition, 0, len(taskNode.When))
 	for i, conditionNode := range taskNode.When {
 		var bareCondition struct {
-			Type ConditionType `yaml:"type"`
+			Type task.ConditionType `yaml:"type"`
 		}
 		if err := conditionNode.Decode(&bareCondition); err != nil {
 			return fmt.Errorf("failed to decode condition type at index %d: %w", i, err)
 		}
 
-		var condition Condition
+		var condition task.Condition
 		switch bareCondition.Type {
-		case ConditionTypeEndpointSuccess:
+		case task.ConditionTypeEndpointSuccess:
 			var c ConditionEndpointSuccess
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
 			}
 			condition = &c
-		case ConditionTypeEndpointValue:
+		case task.ConditionTypeEndpointValue:
 			var c ConditionEndpointValue
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
 			}
 			condition = &c
-		case ConditionTypePrometheusMetric:
+		case task.ConditionTypePrometheusMetric:
 			var c ConditionPrometheusMetric
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
 			}
 			condition = &c
-		case ConditionTypeAlwaysTrue:
+		case task.ConditionTypeAlwaysTrue:
 			var c ConditionAlwaysTrue
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
 			}
 			condition = &c
-		case ConditionTypeK8sDeploymentReady:
+		case task.ConditionTypeK8sDeploymentReady:
 			var c ConditionK8sDeploymentReady
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
@@ -210,66 +211,66 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		t.When = append(t.When, condition)
 	}
 
-	t.Then = make([]Action, 0, len(taskNode.Then))
+	t.Then = make([]task.Action, 0, len(taskNode.Then))
 	for i, actionNode := range taskNode.Then {
 		var bareAction struct {
-			Type ActionType `yaml:"type"`
+			Type task.ActionType `yaml:"type"`
 		}
 		if err := actionNode.Decode(&bareAction); err != nil {
 			return fmt.Errorf("failed to decode action type at index %d: %w", i, err)
 		}
 
-		var action Action
+		var action task.Action
 		switch bareAction.Type {
-		case ActionTypeEndpoint:
+		case task.ActionTypeEndpoint:
 			var a ActionEndpoint
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeEcho:
+		case task.ActionTypeEcho:
 			var a ActionEcho
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeDelay:
+		case task.ActionTypeDelay:
 			var a ActionDelay
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeConfigValueSum:
+		case task.ActionTypeConfigValueSum:
 			var a ActionConfigValueSum
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeK8sExecDeployment:
+		case task.ActionTypeK8sExecDeployment:
 			var a ActionK8sExecDeployment
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeK8sRestartDeployment:
+		case task.ActionTypeK8sRestartDeployment:
 			var a ActionK8sRestartDeployment
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeK8sWaitDeploymentRollout:
+		case task.ActionTypeK8sWaitDeploymentRollout:
 			var a ActionK8sWaitDeploymentRollout
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeK8sUpdateConfigMap:
+		case task.ActionTypeK8sUpdateConfigMap:
 			var a ActionK8sUpdateConfigMap
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeK8sScaleDeployment:
+		case task.ActionTypeK8sScaleDeployment:
 			var a ActionK8sScaleDeployment
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
@@ -284,13 +285,13 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func LoadConfig(filePath string) (*Config, error) {
+func LoadConfig(filePath string) (*task.Config, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var config Config
+	var config task.Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}

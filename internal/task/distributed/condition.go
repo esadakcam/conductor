@@ -1,4 +1,4 @@
-package task
+package distributed
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 
 	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/logger"
+	"github.com/esadakcam/conductor/internal/task"
 	"github.com/esadakcam/conductor/internal/utils/httpclient"
 )
 
@@ -276,22 +277,22 @@ func (c *ConditionK8sDeploymentReady) Evaluate(ctx context.Context) (bool, error
 	return k8s.IsDeploymentReady(deployment, &c.Replicas)
 }
 
-func (c *ConditionEndpointSuccess) GetType() ConditionType {
-	return ConditionTypeEndpointSuccess
+func (c *ConditionEndpointSuccess) GetType() task.ConditionType {
+	return task.ConditionTypeEndpointSuccess
 }
 
-func (c *ConditionEndpointValue) GetType() ConditionType {
-	return ConditionTypeEndpointValue
+func (c *ConditionEndpointValue) GetType() task.ConditionType {
+	return task.ConditionTypeEndpointValue
 }
 
-func (c *ConditionPrometheusMetric) GetType() ConditionType {
-	return ConditionTypePrometheusMetric
+func (c *ConditionPrometheusMetric) GetType() task.ConditionType {
+	return task.ConditionTypePrometheusMetric
 }
 
-func (c *ConditionAlwaysTrue) GetType() ConditionType {
-	return ConditionTypeAlwaysTrue
+func (c *ConditionAlwaysTrue) GetType() task.ConditionType {
+	return task.ConditionTypeAlwaysTrue
 }
 
-func (c *ConditionK8sDeploymentReady) GetType() ConditionType {
-	return ConditionTypeK8sDeploymentReady
+func (c *ConditionK8sDeploymentReady) GetType() task.ConditionType {
+	return task.ConditionTypeK8sDeploymentReady
 }

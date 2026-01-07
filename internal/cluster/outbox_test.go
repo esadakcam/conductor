@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/esadakcam/conductor/internal/task"
+	"github.com/esadakcam/conductor/internal/task/distributed"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -17,7 +18,7 @@ import (
 type mockAction struct {
 	executeCalled *atomic.Int32
 	executeErr    error
-	executeFn     func(ctx context.Context, epoch int64, idempotencyId string) error
+	executeFn     func(ctx context.Context, payload any) error
 }
 
 func newMockAction() *mockAction {
@@ -26,10 +27,10 @@ func newMockAction() *mockAction {
 	}
 }
 
-func (m *mockAction) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+func (m *mockAction) Execute(ctx context.Context, payload any) error {
 	m.executeCalled.Add(1)
 	if m.executeFn != nil {
-		return m.executeFn(ctx, epoch, idempotencyId)
+		return m.executeFn(ctx, payload)
 	}
 	return m.executeErr
 }
@@ -74,8 +75,8 @@ func TestNewOutbox(t *testing.T) {
 	ctx := context.Background()
 
 	tasks := []task.Task{
-		{Name: "task1", Then: []task.Action{newMockAction()}},
-		{Name: "task2", Then: []task.Action{newMockAction()}},
+		&distributed.Task{Name: "task1", Then: []task.Action{newMockAction()}},
+		&distributed.Task{Name: "task2", Then: []task.Action{newMockAction()}},
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, tasks)
@@ -170,7 +171,7 @@ func TestOutbox_AddTask_NewTask(t *testing.T) {
 	ctx := context.Background()
 
 	action := newMockAction()
-	testTask := task.Task{
+	testTask := &distributed.Task{
 		Name: "new-task",
 		Then: []task.Action{action},
 	}
@@ -207,7 +208,7 @@ func TestOutbox_AddTask_AlreadyExecuting(t *testing.T) {
 	ctx := context.Background()
 
 	action := newMockAction()
-	testTask := task.Task{
+	testTask := &distributed.Task{
 		Name: "already-executing-task",
 		Then: []task.Action{action},
 	}
@@ -240,7 +241,7 @@ func TestOutbox_AddTask_MultipleSteps(t *testing.T) {
 	action2 := newMockAction()
 	action3 := newMockAction()
 
-	testTask := task.Task{
+	testTask := &distributed.Task{
 		Name: "multi-step-task",
 		Then: []task.Action{action1, action2, action3},
 	}
@@ -295,7 +296,7 @@ func TestOutbox_AddTask_StepError(t *testing.T) {
 	action2.executeErr = fmt.Errorf("step 2 error")
 	action3 := newMockAction()
 
-	testTask := task.Task{
+	testTask := &distributed.Task{
 		Name: "error-task",
 		Then: []task.Action{action1, action2, action3},
 	}
@@ -341,7 +342,7 @@ func TestOutbox_Init_WithExistingTasks(t *testing.T) {
 
 	action := newMockAction()
 	tasks := []task.Task{
-		{Name: "existing-task", Then: []task.Action{action}},
+		&distributed.Task{Name: "existing-task", Then: []task.Action{action}},
 	}
 
 	// NewOutbox should pick up the existing task and execute it
@@ -387,7 +388,7 @@ func TestOutbox_Init_ResumeFromStep(t *testing.T) {
 	action2 := newMockAction()
 
 	tasks := []task.Task{
-		{Name: "resume-task", Then: []task.Action{action0, action1, action2}},
+		&distributed.Task{Name: "resume-task", Then: []task.Action{action0, action1, action2}},
 	}
 
 	// NewOutbox should resume from step 1
@@ -427,7 +428,7 @@ func TestOutbox_Init_NoMatchingTask(t *testing.T) {
 
 	action := newMockAction()
 	tasks := []task.Task{
-		{Name: "different-task", Then: []task.Action{action}},
+		&distributed.Task{Name: "different-task", Then: []task.Action{action}},
 	}
 
 	// NewOutbox should not pick up the orphaned task
@@ -459,13 +460,13 @@ func TestOutbox_AddTask_ConcurrentSameTask(t *testing.T) {
 
 	var executionCount atomic.Int32
 	action := newMockAction()
-	action.executeFn = func(ctx context.Context, epoch int64, idempotencyId string) error {
+	action.executeFn = func(ctx context.Context, payload any) error {
 		executionCount.Add(1)
 		time.Sleep(50 * time.Millisecond) // Simulate some work
 		return nil
 	}
 
-	testTask := task.Task{
+	testTask := &distributed.Task{
 		Name: "concurrent-task",
 		Then: []task.Action{action},
 	}
@@ -500,7 +501,7 @@ func TestOutbox_AddTask_EpochMismatch(t *testing.T) {
 	ctx := context.Background()
 
 	action := newMockAction()
-	testTask := task.Task{
+	testTask := &distributed.Task{
 		Name: "epoch-mismatch-task",
 		Then: []task.Action{action},
 	}
@@ -535,13 +536,13 @@ func TestOutbox_FullfillTask_ContextCancellation(t *testing.T) {
 
 	actionCalled := make(chan struct{}, 1)
 	action := newMockAction()
-	action.executeFn = func(ctx context.Context, epoch int64, idempotencyId string) error {
+	action.executeFn = func(ctx context.Context, payload any) error {
 		actionCalled <- struct{}{}
 		<-ctx.Done()
 		return ctx.Err()
 	}
 
-	testTask := task.Task{
+	testTask := &distributed.Task{
 		Name: "cancellation-task",
 		Then: []task.Action{action},
 	}
@@ -575,14 +576,19 @@ func TestOutbox_IdempotencyId_Uniqueness(t *testing.T) {
 	var mu sync.Mutex
 
 	action := newMockAction()
-	action.executeFn = func(ctx context.Context, epoch int64, idempotencyId string) error {
+	action.executeFn = func(ctx context.Context, payload any) error {
 		mu.Lock()
+		_, idempotencyId, err := distributed.GetPayload(payload)
+		if err != nil {
+			mu.Unlock()
+			return err
+		}
 		idempotencyIds = append(idempotencyIds, idempotencyId)
 		mu.Unlock()
 		return nil
 	}
 
-	testTask := task.Task{
+	testTask := &distributed.Task{
 		Name: "idempotency-task",
 		Then: []task.Action{action},
 	}
@@ -621,7 +627,7 @@ func TestOutbox_EmptyTask(t *testing.T) {
 	ctx := context.Background()
 
 	// Task with no actions
-	testTask := task.Task{
+	testTask := &distributed.Task{
 		Name: "empty-task",
 		Then: []task.Action{},
 	}
@@ -656,8 +662,9 @@ func TestOutbox_Init_ExecutesWhileAddTaskSkips(t *testing.T) {
 	actionStarted := make(chan struct{}, 1)
 
 	action := newMockAction()
-	action.executeFn = func(ctx context.Context, epoch int64, idempotencyId string) error {
+	action.executeFn = func(ctx context.Context, payload any) error {
 		executionCount.Add(1)
+
 		// Signal that action has started
 		select {
 		case actionStarted <- struct{}{}:
@@ -668,7 +675,7 @@ func TestOutbox_Init_ExecutesWhileAddTaskSkips(t *testing.T) {
 		return nil
 	}
 
-	testTask := task.Task{
+	testTask := &distributed.Task{
 		Name: "init-task",
 		Then: []task.Action{action},
 	}
