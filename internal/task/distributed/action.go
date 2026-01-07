@@ -1,4 +1,4 @@
-package task
+package distributed
 
 import (
 	"bytes"
@@ -11,14 +11,20 @@ import (
 	"time"
 
 	"github.com/esadakcam/conductor/internal/logger"
+	"github.com/esadakcam/conductor/internal/task"
 	"github.com/esadakcam/conductor/internal/utils/httpclient"
 )
 
-func (a *ActionEndpoint) GetType() ActionType {
-	return ActionTypeEndpoint
+func (a *ActionEndpoint) GetType() task.ActionType {
+	return task.ActionTypeEndpoint
 }
 
-func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+func (a *ActionEndpoint) Execute(ctx context.Context, payload any) error {
+	_, idempotencyId, err := GetPayload(payload)
+	if err != nil {
+		logger.Errorf("ActionEndpoint: failed to get payload: %v", err)
+		return fmt.Errorf("failed to get payload: %w", err)
+	}
 	if a.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
 		logger.Error("ActionEndpoint: endpoint is required")
@@ -75,20 +81,20 @@ func (a *ActionEndpoint) Execute(ctx context.Context, epoch int64, idempotencyId
 	return nil
 }
 
-func (a *ActionEcho) GetType() ActionType {
-	return ActionTypeEcho
+func (a *ActionEcho) GetType() task.ActionType {
+	return task.ActionTypeEcho
 }
 
-func (a *ActionEcho) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+func (a *ActionEcho) Execute(ctx context.Context, payload any) error {
 	logger.Info(a.Message)
 	return nil
 }
 
-func (a *ActionDelay) GetType() ActionType {
-	return ActionTypeDelay
+func (a *ActionDelay) GetType() task.ActionType {
+	return task.ActionTypeDelay
 }
 
-func (a *ActionDelay) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+func (a *ActionDelay) Execute(ctx context.Context, payload any) error {
 	logger.Infof("ActionDelay: sleeping for %s", a.Time)
 	select {
 	case <-time.After(a.Time):
@@ -98,11 +104,16 @@ func (a *ActionDelay) Execute(ctx context.Context, epoch int64, idempotencyId st
 	}
 }
 
-func (a *ActionConfigValueSum) GetType() ActionType {
-	return ActionTypeConfigValueSum
+func (a *ActionConfigValueSum) GetType() task.ActionType {
+	return task.ActionTypeConfigValueSum
 }
 
-func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+func (a *ActionConfigValueSum) Execute(ctx context.Context, payload any) error {
+	epoch, idempotencyId, err := GetPayload(payload)
+	if err != nil {
+		logger.Errorf("ActionConfigValueSum: failed to get payload: %v", err)
+		return fmt.Errorf("failed to get payload: %w", err)
+	}
 	curSumMap := a.fetchCurrentValues(ctx)
 
 	curSum := 0
@@ -118,11 +129,18 @@ func (a *ActionConfigValueSum) Execute(ctx context.Context, epoch int64, idempot
 	return a.distributeAndApplyChanges(ctx, curSumMap, epoch, idempotencyId)
 }
 
-func (a *ActionK8sExecDeployment) GetType() ActionType {
-	return ActionTypeK8sExecDeployment
+func (a *ActionK8sExecDeployment) GetType() task.ActionType {
+	return task.ActionTypeK8sExecDeployment
 }
 
-func (a *ActionK8sExecDeployment) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+func (a *ActionK8sExecDeployment) Execute(ctx context.Context, payload any) error {
+	epoch, idempotencyId, err := GetPayload(payload)
+
+	if err != nil {
+		logger.Errorf("ActionK8sExecDeployment: failed to get payload: %v", err)
+		return fmt.Errorf("failed to get payload: %w", err)
+	}
+
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
 		logger.Error("ActionK8sExecDeployment: deployment name is required")
@@ -245,11 +263,17 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, cu
 	return nil
 }
 
-func (a *ActionK8sRestartDeployment) GetType() ActionType {
-	return ActionTypeK8sRestartDeployment
+func (a *ActionK8sRestartDeployment) GetType() task.ActionType {
+	return task.ActionTypeK8sRestartDeployment
 }
 
-func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, payload any) error {
+	epoch, idempotencyId, err := GetPayload(payload)
+	if err != nil {
+		logger.Errorf("ActionK8sRestartDeployment: failed to get payload: %v", err)
+		return fmt.Errorf("failed to get payload: %w", err)
+	}
+
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
 		logger.Error("ActionK8sRestartDeployment: deployment name is required")
@@ -288,11 +312,17 @@ func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, epoch int64, i
 	return nil
 }
 
-func (a *ActionK8sWaitDeploymentRollout) GetType() ActionType {
-	return ActionTypeK8sWaitDeploymentRollout
+func (a *ActionK8sWaitDeploymentRollout) GetType() task.ActionType {
+	return task.ActionTypeK8sWaitDeploymentRollout
 }
 
-func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, payload any) error {
+	epoch, idempotencyId, err := GetPayload(payload)
+	if err != nil {
+		logger.Errorf("ActionK8sWaitDeploymentRollout: failed to get payload: %v", err)
+		return fmt.Errorf("failed to get payload: %w", err)
+	}
+
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
 		logger.Error("ActionK8sWaitDeploymentRollout: deployment name is required")
@@ -363,11 +393,17 @@ func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, epoch int6
 	return nil
 }
 
-func (a *ActionK8sUpdateConfigMap) GetType() ActionType {
-	return ActionTypeK8sUpdateConfigMap
+func (a *ActionK8sUpdateConfigMap) GetType() task.ActionType {
+	return task.ActionTypeK8sUpdateConfigMap
 }
 
-func (a *ActionK8sUpdateConfigMap) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+func (a *ActionK8sUpdateConfigMap) Execute(ctx context.Context, payload any) error {
+	epoch, idempotencyId, err := GetPayload(payload)
+	if err != nil {
+		logger.Errorf("ActionK8sUpdateConfigMap: failed to get payload: %v", err)
+		return fmt.Errorf("failed to get payload: %w", err)
+	}
+
 	if a.ConfigMap == "" {
 		err := fmt.Errorf("config_map name is required")
 		logger.Error("ActionK8sUpdateConfigMap: config_map name is required")
@@ -408,11 +444,17 @@ func (a *ActionK8sUpdateConfigMap) Execute(ctx context.Context, epoch int64, ide
 	return nil
 }
 
-func (a *ActionK8sScaleDeployment) GetType() ActionType {
-	return ActionTypeK8sScaleDeployment
+func (a *ActionK8sScaleDeployment) GetType() task.ActionType {
+	return task.ActionTypeK8sScaleDeployment
 }
 
-func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, epoch int64, idempotencyId string) error {
+func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, payload any) error {
+	epoch, idempotencyId, err := GetPayload(payload)
+	if err != nil {
+		logger.Errorf("ActionK8sScaleDeployment: failed to get payload: %v", err)
+		return fmt.Errorf("failed to get payload: %w", err)
+	}
+
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
 		logger.Error("ActionK8sScaleDeployment: deployment name is required")
@@ -445,4 +487,32 @@ func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, epoch int64, ide
 
 	logger.Infof("Successfully scaled deployment %s/%s to %d replicas via %s", namespace, a.Deployment, a.Replicas, a.Member)
 	return nil
+}
+
+// Returns epoch and idempotencyId from payload
+func GetPayload(payload any) (int64, string, error) {
+	data, ok := payload.(map[string]any)
+	if !ok {
+		return 0, "", fmt.Errorf("invalid payload format")
+	}
+
+	idempotencyID, ok := data["idempotencyId"].(string)
+	if !ok || idempotencyID == "" {
+		return 0, "", fmt.Errorf("invalid or missing idempotencyId in payload")
+	}
+
+	switch v := data["epoch"].(type) {
+	case int:
+		return int64(v), idempotencyID, nil
+	case int32:
+		return int64(v), idempotencyID, nil
+	case int64:
+		return v, idempotencyID, nil
+	case float64:
+		return int64(v), idempotencyID, nil
+	case float32:
+		return int64(v), idempotencyID, nil
+	default:
+		return 0, idempotencyID, fmt.Errorf("invalid or missing epoch in payload")
+	}
 }

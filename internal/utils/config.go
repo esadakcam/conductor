@@ -7,6 +7,7 @@ import (
 	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/server"
 	"github.com/esadakcam/conductor/internal/task"
+	"github.com/esadakcam/conductor/internal/task/distributed"
 	"gopkg.in/yaml.v3"
 )
 
@@ -14,7 +15,6 @@ type Config struct {
 	Name          string              `yaml:"name"`
 	EtcdEndpoints []string            `yaml:"db"`
 	Server        server.ServerConfig `yaml:"server"`
-	Tasks         []task.Task         `yaml:"tasks"`
 }
 
 // LoadConfig reads the configuration from the config file
@@ -48,4 +48,33 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+func LoadDistributedTasks(configPath string) ([]task.Task, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		logger.Errorf("LoadDistributedTasks: failed to read config file %s: %v", configPath, err)
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var config struct {
+		Tasks []distributed.Task `yaml:"tasks"`
+	}
+
+	// Try unmarshalling as a config struct first (e.g. config.example.yaml)
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		// If that fails, try unmarshalling as a simple list of tasks
+		var tasks []distributed.Task
+		if errList := yaml.Unmarshal(data, &tasks); errList != nil {
+			logger.Errorf("LoadDistributedTasks: failed to parse config file %s: %v", configPath, err)
+			return nil, fmt.Errorf("failed to parse config: %w", err)
+		}
+		config.Tasks = tasks
+	}
+
+	var result []task.Task
+	for i := range config.Tasks {
+		result = append(result, &config.Tasks[i])
+	}
+	return result, nil
 }

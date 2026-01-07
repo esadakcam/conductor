@@ -33,10 +33,11 @@ type Config struct {
 	Tasks []Task `yaml:"tasks"`
 }
 
-type Task struct {
-	Name string      `yaml:"name"`
-	When []Condition `yaml:"when"`
-	Then []Action    `yaml:"then"`
+type Task interface {
+	GetName() string
+	GetConditions() []Condition
+	GetActions() []Action
+	UnmarshalYAML(unmarshal func(interface{}) error) error
 }
 
 type Condition interface {
@@ -45,7 +46,7 @@ type Condition interface {
 }
 
 type Action interface {
-	Execute(ctx context.Context, epoch int64, idempotencyId string) error
+	Execute(ctx context.Context, payload any) error
 	GetType() ActionType
 }
 

@@ -1,20 +1,20 @@
-package task
+package distributed
 
 import (
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/esadakcam/conductor/internal/task"
 	"gopkg.in/yaml.v3"
 )
 
 func (c *ConditionEndpointSuccess) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ConditionEndpointSuccess
-	var aux alias
+	var aux task.ConditionEndpointSuccess
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*c = ConditionEndpointSuccess(aux)
+	c.ConditionEndpointSuccess = aux
 	if c.Status == 0 {
 		c.Status = 200
 	}
@@ -22,12 +22,11 @@ func (c *ConditionEndpointSuccess) UnmarshalYAML(unmarshal func(interface{}) err
 }
 
 func (c *ConditionEndpointValue) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ConditionEndpointValue
-	var aux alias
+	var aux task.ConditionEndpointValue
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*c = ConditionEndpointValue(aux)
+	c.ConditionEndpointValue = aux
 	if c.Operator == "" {
 		c.Operator = "eq"
 	}
@@ -35,12 +34,11 @@ func (c *ConditionEndpointValue) UnmarshalYAML(unmarshal func(interface{}) error
 }
 
 func (c *ConditionPrometheusMetric) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ConditionPrometheusMetric
-	var aux alias
+	var aux task.ConditionPrometheusMetric
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*c = ConditionPrometheusMetric(aux)
+	c.ConditionPrometheusMetric = aux
 	if c.Operator == "" {
 		c.Operator = "eq"
 	}
@@ -48,25 +46,32 @@ func (c *ConditionPrometheusMetric) UnmarshalYAML(unmarshal func(interface{}) er
 }
 
 func (c *ConditionK8sDeploymentReady) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ConditionK8sDeploymentReady
-	var aux alias
+	var aux task.ConditionK8sDeploymentReady
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*c = ConditionK8sDeploymentReady(aux)
+	c.ConditionK8sDeploymentReady = aux
 	if c.Namespace == "" {
 		c.Namespace = "default"
 	}
 	return nil
 }
 
-func (a *ActionEndpoint) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ActionEndpoint
-	var aux alias
+func (c *ConditionAlwaysTrue) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ConditionAlwaysTrue
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*a = ActionEndpoint(aux)
+	c.ConditionAlwaysTrue = aux
+	return nil
+}
+
+func (a *ActionEndpoint) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ActionEndpoint
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	a.ActionEndpoint = aux
 	if a.Method == "" {
 		a.Method = "GET"
 	}
@@ -75,11 +80,11 @@ func (a *ActionEndpoint) UnmarshalYAML(unmarshal func(interface{}) error) error 
 
 func (a *ActionConfigValueSum) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var actionNode struct {
-		Type          ActionType `yaml:"type"`
-		ConfigMapName string     `yaml:"config_map"`
-		Key           string     `yaml:"key"`
-		Sum           int        `yaml:"sum"`
-		Members       []string   `yaml:"members"`
+		Type          task.ActionType `yaml:"type"`
+		ConfigMapName string          `yaml:"config_map"`
+		Key           string          `yaml:"key"`
+		Sum           int             `yaml:"sum"`
+		Members       []string        `yaml:"members"`
 	}
 
 	if err := unmarshal(&actionNode); err != nil {
@@ -95,13 +100,42 @@ func (a *ActionConfigValueSum) UnmarshalYAML(unmarshal func(interface{}) error) 
 	return nil
 }
 
-func (a *ActionK8sRestartDeployment) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ActionK8sRestartDeployment
-	var aux alias
+func (a *ActionEcho) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ActionEcho
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*a = ActionK8sRestartDeployment(aux)
+	a.ActionEcho = aux
+	return nil
+}
+
+func (a *ActionDelay) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ActionDelay
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	a.ActionDelay = aux
+	return nil
+}
+
+func (a *ActionK8sExecDeployment) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ActionK8sExecDeployment
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	a.ActionK8sExecDeployment = aux
+	if a.Namespace == "" {
+		a.Namespace = "default"
+	}
+	return nil
+}
+
+func (a *ActionK8sRestartDeployment) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ActionK8sRestartDeployment
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	a.ActionK8sRestartDeployment = aux
 	if a.Namespace == "" {
 		a.Namespace = "default"
 	}
@@ -109,12 +143,11 @@ func (a *ActionK8sRestartDeployment) UnmarshalYAML(unmarshal func(interface{}) e
 }
 
 func (a *ActionK8sWaitDeploymentRollout) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ActionK8sWaitDeploymentRollout
-	var aux alias
+	var aux task.ActionK8sWaitDeploymentRollout
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*a = ActionK8sWaitDeploymentRollout(aux)
+	a.ActionK8sWaitDeploymentRollout = aux
 	if a.Namespace == "" {
 		a.Namespace = "default"
 	}
@@ -125,12 +158,11 @@ func (a *ActionK8sWaitDeploymentRollout) UnmarshalYAML(unmarshal func(interface{
 }
 
 func (a *ActionK8sUpdateConfigMap) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ActionK8sUpdateConfigMap
-	var aux alias
+	var aux task.ActionK8sUpdateConfigMap
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*a = ActionK8sUpdateConfigMap(aux)
+	a.ActionK8sUpdateConfigMap = aux
 	if a.Namespace == "" {
 		a.Namespace = "default"
 	}
@@ -138,12 +170,11 @@ func (a *ActionK8sUpdateConfigMap) UnmarshalYAML(unmarshal func(interface{}) err
 }
 
 func (a *ActionK8sScaleDeployment) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ActionK8sScaleDeployment
-	var aux alias
+	var aux task.ActionK8sScaleDeployment
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*a = ActionK8sScaleDeployment(aux)
+	a.ActionK8sScaleDeployment = aux
 	if a.Namespace == "" {
 		a.Namespace = "default"
 	}
@@ -163,42 +194,42 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	t.Name = taskNode.Name
 
-	t.When = make([]Condition, 0, len(taskNode.When))
+	t.When = make([]task.Condition, 0, len(taskNode.When))
 	for i, conditionNode := range taskNode.When {
 		var bareCondition struct {
-			Type ConditionType `yaml:"type"`
+			Type task.ConditionType `yaml:"type"`
 		}
 		if err := conditionNode.Decode(&bareCondition); err != nil {
 			return fmt.Errorf("failed to decode condition type at index %d: %w", i, err)
 		}
 
-		var condition Condition
+		var condition task.Condition
 		switch bareCondition.Type {
-		case ConditionTypeEndpointSuccess:
+		case task.ConditionTypeEndpointSuccess:
 			var c ConditionEndpointSuccess
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
 			}
 			condition = &c
-		case ConditionTypeEndpointValue:
+		case task.ConditionTypeEndpointValue:
 			var c ConditionEndpointValue
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
 			}
 			condition = &c
-		case ConditionTypePrometheusMetric:
+		case task.ConditionTypePrometheusMetric:
 			var c ConditionPrometheusMetric
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
 			}
 			condition = &c
-		case ConditionTypeAlwaysTrue:
+		case task.ConditionTypeAlwaysTrue:
 			var c ConditionAlwaysTrue
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
 			}
 			condition = &c
-		case ConditionTypeK8sDeploymentReady:
+		case task.ConditionTypeK8sDeploymentReady:
 			var c ConditionK8sDeploymentReady
 			if err := conditionNode.Decode(&c); err != nil {
 				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
@@ -210,66 +241,66 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		t.When = append(t.When, condition)
 	}
 
-	t.Then = make([]Action, 0, len(taskNode.Then))
+	t.Then = make([]task.Action, 0, len(taskNode.Then))
 	for i, actionNode := range taskNode.Then {
 		var bareAction struct {
-			Type ActionType `yaml:"type"`
+			Type task.ActionType `yaml:"type"`
 		}
 		if err := actionNode.Decode(&bareAction); err != nil {
 			return fmt.Errorf("failed to decode action type at index %d: %w", i, err)
 		}
 
-		var action Action
+		var action task.Action
 		switch bareAction.Type {
-		case ActionTypeEndpoint:
+		case task.ActionTypeEndpoint:
 			var a ActionEndpoint
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeEcho:
+		case task.ActionTypeEcho:
 			var a ActionEcho
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeDelay:
+		case task.ActionTypeDelay:
 			var a ActionDelay
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeConfigValueSum:
+		case task.ActionTypeConfigValueSum:
 			var a ActionConfigValueSum
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeK8sExecDeployment:
+		case task.ActionTypeK8sExecDeployment:
 			var a ActionK8sExecDeployment
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeK8sRestartDeployment:
+		case task.ActionTypeK8sRestartDeployment:
 			var a ActionK8sRestartDeployment
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeK8sWaitDeploymentRollout:
+		case task.ActionTypeK8sWaitDeploymentRollout:
 			var a ActionK8sWaitDeploymentRollout
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeK8sUpdateConfigMap:
+		case task.ActionTypeK8sUpdateConfigMap:
 			var a ActionK8sUpdateConfigMap
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
 			}
 			action = &a
-		case ActionTypeK8sScaleDeployment:
+		case task.ActionTypeK8sScaleDeployment:
 			var a ActionK8sScaleDeployment
 			if err := actionNode.Decode(&a); err != nil {
 				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
@@ -284,13 +315,13 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func LoadConfig(filePath string) (*Config, error) {
+func LoadConfig(filePath string) (*task.Config, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var config Config
+	var config task.Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}

@@ -1,10 +1,12 @@
-package task
+package distributed
 
 import (
 	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/esadakcam/conductor/internal/task"
 )
 
 func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
@@ -18,8 +20,10 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with matching status code",
 			condition: &ConditionEndpointSuccess{
-				Endpoint: "",
-				Status:   200,
+				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+					Endpoint: "",
+					Status:   200,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -31,8 +35,10 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with non-matching status code",
 			condition: &ConditionEndpointSuccess{
-				Endpoint: "",
-				Status:   200,
+				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+					Endpoint: "",
+					Status:   200,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
@@ -44,9 +50,11 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with matching status and response body",
 			condition: &ConditionEndpointSuccess{
-				Endpoint:     "",
-				Status:       200,
-				ResponseBody: "Hello World",
+				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+					Endpoint:     "",
+					Status:       200,
+					ResponseBody: "Hello World",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -58,9 +66,11 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with matching status and response body (with whitespace)",
 			condition: &ConditionEndpointSuccess{
-				Endpoint:     "",
-				Status:       200,
-				ResponseBody: "Hello World",
+				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+					Endpoint:     "",
+					Status:       200,
+					ResponseBody: "Hello World",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -72,9 +82,11 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with non-matching response body",
 			condition: &ConditionEndpointSuccess{
-				Endpoint:     "",
-				Status:       200,
-				ResponseBody: "Expected Body",
+				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+					Endpoint:     "",
+					Status:       200,
+					ResponseBody: "Expected Body",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -86,8 +98,10 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with custom status code",
 			condition: &ConditionEndpointSuccess{
-				Endpoint: "",
-				Status:   201,
+				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+					Endpoint: "",
+					Status:   201,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusCreated)
@@ -99,8 +113,10 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "empty endpoint returns error",
 			condition: &ConditionEndpointSuccess{
-				Endpoint: "", // Empty endpoint should trigger error
-				Status:   200,
+				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+					Endpoint: "", // Empty endpoint should trigger error
+					Status:   200,
+				},
 			},
 			serverHandler:  nil, // Not used for this test
 			expectedResult: false,
@@ -109,9 +125,11 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with empty response body",
 			condition: &ConditionEndpointSuccess{
-				Endpoint:     "",
-				Status:       204,
-				ResponseBody: "",
+				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+					Endpoint:     "",
+					Status:       204,
+					ResponseBody: "",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNoContent)
@@ -150,8 +168,10 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 
 func TestConditionEndpointSuccess_Evaluate_InvalidEndpoint(t *testing.T) {
 	condition := &ConditionEndpointSuccess{
-		Endpoint: "http://invalid-endpoint-that-does-not-exist-12345.local",
-		Status:   200,
+		ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+			Endpoint: "http://invalid-endpoint-that-does-not-exist-12345.local",
+			Status:   200,
+		},
 	}
 
 	result, err := condition.Evaluate(context.Background())
@@ -175,9 +195,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with eq operator (equal)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    42,
-				Operator: "eq",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    42,
+					Operator: "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -189,9 +211,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with eq operator (not equal)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    42,
-				Operator: "eq",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    42,
+					Operator: "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -203,9 +227,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with ne operator (not equal)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    42,
-				Operator: "ne",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    42,
+					Operator: "ne",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -217,9 +243,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with ne operator (equal)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    42,
-				Operator: "ne",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    42,
+					Operator: "ne",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -231,9 +259,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with lt operator (less than)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    50,
-				Operator: "lt",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    50,
+					Operator: "lt",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -245,9 +275,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with lt operator (not less than)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    50,
-				Operator: "lt",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    50,
+					Operator: "lt",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -259,9 +291,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with gt operator (greater than)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    50,
-				Operator: "gt",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    50,
+					Operator: "gt",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -273,9 +307,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with gt operator (not greater than)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    50,
-				Operator: "gt",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    50,
+					Operator: "gt",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -287,9 +323,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with le operator (less than or equal - less)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    50,
-				Operator: "le",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    50,
+					Operator: "le",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -301,9 +339,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with le operator (less than or equal - equal)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    50,
-				Operator: "le",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    50,
+					Operator: "le",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -315,9 +355,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with le operator (greater than)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    50,
-				Operator: "le",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    50,
+					Operator: "le",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -329,9 +371,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with ge operator (greater than or equal - greater)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    50,
-				Operator: "ge",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    50,
+					Operator: "ge",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -343,9 +387,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with ge operator (greater than or equal - equal)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    50,
-				Operator: "ge",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    50,
+					Operator: "ge",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -357,9 +403,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with ge operator (less than)",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    50,
-				Operator: "ge",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    50,
+					Operator: "ge",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -371,9 +419,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with whitespace in response",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    42,
-				Operator: "eq",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    42,
+					Operator: "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -385,9 +435,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "empty endpoint returns error",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    42,
-				Operator: "eq",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    42,
+					Operator: "eq",
+				},
 			},
 			serverHandler:  nil,
 			expectedResult: false,
@@ -396,9 +448,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "invalid response body (non-numeric) returns error",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    42,
-				Operator: "eq",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    42,
+					Operator: "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -410,9 +464,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "unsupported operator returns error",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    42,
-				Operator: "invalid",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    42,
+					Operator: "invalid",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -424,9 +480,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "negative numbers work correctly",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    -10,
-				Operator: "lt",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    -10,
+					Operator: "lt",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -438,9 +496,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "zero value works correctly",
 			condition: &ConditionEndpointValue{
-				Endpoint: "",
-				Value:    0,
-				Operator: "eq",
+				ConditionEndpointValue: task.ConditionEndpointValue{
+					Endpoint: "",
+					Value:    0,
+					Operator: "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -480,9 +540,11 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 
 func TestConditionEndpointValue_Evaluate_InvalidEndpoint(t *testing.T) {
 	condition := &ConditionEndpointValue{
-		Endpoint: "http://invalid-endpoint-that-does-not-exist-12345.local",
-		Value:    42,
-		Operator: "eq",
+		ConditionEndpointValue: task.ConditionEndpointValue{
+			Endpoint: "http://invalid-endpoint-that-does-not-exist-12345.local",
+			Value:    42,
+			Operator: "eq",
+		},
 	}
 
 	result, err := condition.Evaluate(context.Background())
@@ -540,10 +602,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with eq operator on gauge metric",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      42,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      42,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -555,10 +619,12 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with eq operator on gauge metric (not equal)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      100,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      100,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -570,10 +636,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with ne operator",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      100,
-				Operator:   "ne",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      100,
+					Operator:   "ne",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -585,10 +653,12 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with ne operator (equal)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      42,
-				Operator:   "ne",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      42,
+					Operator:   "ne",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -600,10 +670,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with lt operator",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      50,
-				Operator:   "lt",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      50,
+					Operator:   "lt",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -615,10 +687,12 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with lt operator (not less than)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      30,
-				Operator:   "lt",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      30,
+					Operator:   "lt",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -630,10 +704,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with gt operator",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      30,
-				Operator:   "gt",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      30,
+					Operator:   "gt",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -645,10 +721,12 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with gt operator (not greater than)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      50,
-				Operator:   "gt",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      50,
+					Operator:   "gt",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -660,10 +738,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with le operator (less)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      50,
-				Operator:   "le",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      50,
+					Operator:   "le",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -675,10 +755,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with le operator (equal)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      42,
-				Operator:   "le",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      42,
+					Operator:   "le",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -690,10 +772,12 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with le operator (greater)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      30,
-				Operator:   "le",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      30,
+					Operator:   "le",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -705,10 +789,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with ge operator (greater)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      30,
-				Operator:   "ge",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      30,
+					Operator:   "ge",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -720,10 +806,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with ge operator (equal)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      42,
-				Operator:   "ge",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      42,
+					Operator:   "ge",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -735,10 +823,12 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with ge operator (less)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      50,
-				Operator:   "ge",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      50,
+					Operator:   "ge",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -751,10 +841,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation on counter metric",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "http_requests_total",
-				Value:      100,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "http_requests_total",
+					Value:      100,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -767,10 +859,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation on untyped metric",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "some_metric",
-				Value:      55.5,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "some_metric",
+					Value:      55.5,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -783,10 +877,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with float value",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "cpu_usage",
-				Value:      75.5,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "cpu_usage",
+					Value:      75.5,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -798,10 +894,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with float comparison (gt)",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "cpu_usage",
-				Value:      70.0,
-				Operator:   "gt",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "cpu_usage",
+					Value:      70.0,
+					Operator:   "gt",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -814,10 +912,12 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation selecting specific metric from multiple",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "metric_b",
-				Value:      20,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "metric_b",
+					Value:      20,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -830,10 +930,12 @@ cpu_usage 75.5
 		{
 			name: "empty endpoint returns error",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      42,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      42,
+					Operator:   "eq",
+				},
 			},
 			serverHandler:  nil,
 			expectedResult: false,
@@ -842,10 +944,12 @@ cpu_usage 75.5
 		{
 			name: "empty metric name returns error",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "will-be-replaced",
-				MetricName: "",
-				Value:      42,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "will-be-replaced",
+					MetricName: "",
+					Value:      42,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -857,10 +961,12 @@ cpu_usage 75.5
 		{
 			name: "metric not found returns error",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "nonexistent_metric",
-				Value:      42,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "nonexistent_metric",
+					Value:      42,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -872,10 +978,12 @@ cpu_usage 75.5
 		{
 			name: "unsupported operator returns error",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      42,
-				Operator:   "invalid",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      42,
+					Operator:   "invalid",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -887,10 +995,12 @@ cpu_usage 75.5
 		{
 			name: "unsupported metric type (histogram) returns error",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "request_duration_seconds",
-				Value:      100,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "request_duration_seconds",
+					Value:      100,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -902,10 +1012,12 @@ cpu_usage 75.5
 		{
 			name: "invalid prometheus format returns error",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      42,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      42,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -917,10 +1029,12 @@ cpu_usage 75.5
 		{
 			name: "non-200 status code returns error",
 			condition: &ConditionPrometheusMetric{
-				Endpoint:   "",
-				MetricName: "ues_active",
-				Value:      42,
-				Operator:   "eq",
+				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+					Endpoint:   "",
+					MetricName: "ues_active",
+					Value:      42,
+					Operator:   "eq",
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusServiceUnavailable)
@@ -962,10 +1076,12 @@ cpu_usage 75.5
 
 func TestConditionPrometheusMetric_Evaluate_InvalidEndpoint(t *testing.T) {
 	condition := &ConditionPrometheusMetric{
-		Endpoint:   "http://invalid-endpoint-that-does-not-exist-12345.local",
-		MetricName: "ues_active",
-		Value:      42,
-		Operator:   "eq",
+		ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+			Endpoint:   "http://invalid-endpoint-that-does-not-exist-12345.local",
+			MetricName: "ues_active",
+			Value:      42,
+			Operator:   "eq",
+		},
 	}
 
 	result, err := condition.Evaluate(context.Background())
@@ -1068,8 +1184,8 @@ labeled_metric{env="dev"} 50
 
 func TestConditionPrometheusMetric_GetType(t *testing.T) {
 	condition := &ConditionPrometheusMetric{}
-	if condition.GetType() != ConditionTypePrometheusMetric {
-		t.Errorf("expected type %v, got %v", ConditionTypePrometheusMetric, condition.GetType())
+	if condition.GetType() != task.ConditionTypePrometheusMetric {
+		t.Errorf("expected type %v, got %v", task.ConditionTypePrometheusMetric, condition.GetType())
 	}
 }
 
@@ -1186,10 +1302,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment is ready with expected replicas",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "",
-				Deployment: "test-deployment",
-				Namespace:  "default",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "",
+					Deployment: "test-deployment",
+					Namespace:  "default",
+					Replicas:   3,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -1201,10 +1319,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment is rolling out",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "",
-				Deployment: "test-deployment",
-				Namespace:  "default",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "",
+					Deployment: "test-deployment",
+					Namespace:  "default",
+					Replicas:   3,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -1216,10 +1336,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment has pending pods",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "",
-				Deployment: "test-deployment",
-				Namespace:  "default",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "",
+					Deployment: "test-deployment",
+					Namespace:  "default",
+					Replicas:   3,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -1231,10 +1353,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment has stale observed generation",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "",
-				Deployment: "test-deployment",
-				Namespace:  "default",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "",
+					Deployment: "test-deployment",
+					Namespace:  "default",
+					Replicas:   3,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -1246,10 +1370,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment has wrong replica count",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "",
-				Deployment: "test-deployment",
-				Namespace:  "default",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "",
+					Deployment: "test-deployment",
+					Namespace:  "default",
+					Replicas:   3,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -1261,10 +1387,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment has no status yet",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "",
-				Deployment: "test-deployment",
-				Namespace:  "default",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "",
+					Deployment: "test-deployment",
+					Namespace:  "default",
+					Replicas:   3,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -1276,10 +1404,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "empty member returns error",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "",
-				Deployment: "test-deployment",
-				Namespace:  "default",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "",
+					Deployment: "test-deployment",
+					Namespace:  "default",
+					Replicas:   3,
+				},
 			},
 			serverHandler:  nil,
 			expectedResult: false,
@@ -1288,10 +1418,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "empty deployment returns error",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "will-be-replaced",
-				Deployment: "",
-				Namespace:  "default",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "will-be-replaced",
+					Deployment: "",
+					Namespace:  "default",
+					Replicas:   3,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -1303,10 +1435,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "server returns error status",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "",
-				Deployment: "test-deployment",
-				Namespace:  "default",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "",
+					Deployment: "test-deployment",
+					Namespace:  "default",
+					Replicas:   3,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
@@ -1318,10 +1452,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "server returns invalid JSON",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "",
-				Deployment: "test-deployment",
-				Namespace:  "default",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "",
+					Deployment: "test-deployment",
+					Namespace:  "default",
+					Replicas:   3,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -1333,10 +1469,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "default namespace is used when not specified",
 			condition: &ConditionK8sDeploymentReady{
-				Member:     "",
-				Deployment: "test-deployment",
-				Namespace:  "",
-				Replicas:   3,
+				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+					Member:     "",
+					Deployment: "test-deployment",
+					Namespace:  "",
+					Replicas:   3,
+				},
 			},
 			serverHandler: func(w http.ResponseWriter, r *http.Request) {
 				// Verify the URL contains default namespace
@@ -1383,10 +1521,12 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 
 func TestConditionK8sDeploymentReady_Evaluate_InvalidEndpoint(t *testing.T) {
 	condition := &ConditionK8sDeploymentReady{
-		Member:     "http://invalid-endpoint-that-does-not-exist-12345.local",
-		Deployment: "test-deployment",
-		Namespace:  "default",
-		Replicas:   3,
+		ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+			Member:     "http://invalid-endpoint-that-does-not-exist-12345.local",
+			Deployment: "test-deployment",
+			Namespace:  "default",
+			Replicas:   3,
+		},
 	}
 
 	result, err := condition.Evaluate(context.Background())
@@ -1401,7 +1541,7 @@ func TestConditionK8sDeploymentReady_Evaluate_InvalidEndpoint(t *testing.T) {
 
 func TestConditionK8sDeploymentReady_GetType(t *testing.T) {
 	condition := &ConditionK8sDeploymentReady{}
-	if condition.GetType() != ConditionTypeK8sDeploymentReady {
-		t.Errorf("expected type %v, got %v", ConditionTypeK8sDeploymentReady, condition.GetType())
+	if condition.GetType() != task.ConditionTypeK8sDeploymentReady {
+		t.Errorf("expected type %v, got %v", task.ConditionTypeK8sDeploymentReady, condition.GetType())
 	}
 }
