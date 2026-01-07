@@ -2,7 +2,6 @@ package distributed
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/esadakcam/conductor/internal/task"
@@ -313,18 +312,4 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 
 	return nil
-}
-
-func LoadConfig(filePath string) (*task.Config, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	var config task.Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
-	}
-
-	return &config, nil
 }
