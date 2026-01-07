@@ -27,14 +27,28 @@ func main() {
 		cancel()
 	}()
 
-	configPath := os.Getenv("CONDUCTOR_CONFIG")
-	if configPath == "" {
-		configPath = "config/config.example.yaml"
-	}
-	if len(os.Args) > 1 {
-		configPath = os.Args[1]
+	mode := os.Args[1]
+
+	switch mode {
+	case "distributed":
+		initDistributedMode(ctx, cancel)
+	case "centralized":
+		initCentralizedMode(ctx, cancel)
+	default:
+		logger.Fatalf("Unknown mode: %s", mode)
 	}
 
+}
+
+func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
+
+}
+
+func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
+	configPath := os.Args[2]
+	if configPath == "" {
+		logger.Fatal("Config path is required")
+	}
 	config, err := utils.LoadConfig(configPath)
 	if err != nil {
 		logger.Fatalf("Failed to load config: %v", err)

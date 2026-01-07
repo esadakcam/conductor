@@ -267,8 +267,8 @@ func TestActionEndpoint_Execute(t *testing.T) {
 				defer server.Close()
 				tt.action.Endpoint = server.URL
 			}
-
-			err := tt.action.Execute(context.Background(), 0, uuid.New().String())
+			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 0}
+			err := tt.action.Execute(context.Background(), payload)
 
 			if tt.expectedError {
 				if err == nil {
@@ -289,7 +289,9 @@ func TestActionEndpoint_Execute_InvalidEndpoint(t *testing.T) {
 		Method:   "GET",
 	}
 
-	err := action.Execute(context.Background(), 0, uuid.New().String())
+	payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 0}
+
+	err := action.Execute(context.Background(), payload)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -328,8 +330,8 @@ func TestActionEndpoint_Execute_HTTPStatusCodes(t *testing.T) {
 				Endpoint: server.URL,
 				Method:   "GET",
 			}
-
-			err := action.Execute(context.Background(), 0, uuid.New().String())
+			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 0}
+			err := action.Execute(context.Background(), payload)
 
 			if tc.expectedError {
 				if err == nil {
@@ -725,7 +727,8 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 				}
 			}
 
-			err := tt.action.Execute(context.Background(), 1, uuid.New().String())
+			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 0}
+			err := tt.action.Execute(context.Background(), payload)
 
 			if tt.expectedError {
 				if err == nil {
@@ -1006,7 +1009,8 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
+			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": tt.epoch}
+			err := tt.action.Execute(context.Background(), payload)
 
 			if tt.expectedError {
 				if err == nil {
@@ -1030,7 +1034,8 @@ func TestActionK8sExecDeployment_Execute_InvalidEndpoint(t *testing.T) {
 		Command:    []string{"echo"},
 	}
 
-	err := action.Execute(context.Background(), 1, uuid.New().String())
+	payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 1}
+	err := action.Execute(context.Background(), payload)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -1170,7 +1175,8 @@ func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
+			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": tt.epoch}
+			err := tt.action.Execute(context.Background(), payload)
 
 			if tt.expectedError {
 				if err == nil {
@@ -1415,7 +1421,8 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
+			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": tt.epoch}
+			err := tt.action.Execute(context.Background(), payload)
 
 			if tt.expectedError {
 				if err == nil {
@@ -1438,7 +1445,8 @@ func TestActionK8sWaitDeploymentRollout_Execute_InvalidEndpoint(t *testing.T) {
 		Deployment: "my-deployment",
 	}
 
-	err := action.Execute(context.Background(), 1, uuid.New().String())
+	payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 1}
+	err := action.Execute(context.Background(), payload)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -1722,7 +1730,8 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
+			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": tt.epoch}
+			err := tt.action.Execute(context.Background(), payload)
 
 			if tt.expectedError {
 				if err == nil {
@@ -1747,7 +1756,8 @@ func TestActionK8sUpdateConfigMap_Execute_InvalidEndpoint(t *testing.T) {
 		Value:     "my-value",
 	}
 
-	err := action.Execute(context.Background(), 1, uuid.New().String())
+	payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 1}
+	err := action.Execute(context.Background(), payload)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -2009,7 +2019,8 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			err := tt.action.Execute(context.Background(), tt.epoch, uuid.New().String())
+			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": tt.epoch}
+			err := tt.action.Execute(context.Background(), payload)
 
 			if tt.expectedError {
 				if err == nil {
@@ -2033,7 +2044,8 @@ func TestActionK8sScaleDeployment_Execute_InvalidEndpoint(t *testing.T) {
 		Replicas:   3,
 	}
 
-	err := action.Execute(context.Background(), 1, uuid.New().String())
+	payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 1}
+	err := action.Execute(context.Background(), payload)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
