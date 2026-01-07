@@ -10,12 +10,11 @@ import (
 )
 
 func (c *ConditionEndpointSuccess) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ConditionEndpointSuccess
-	var aux alias
+	var aux task.ConditionEndpointSuccess
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*c = ConditionEndpointSuccess(aux)
+	c.ConditionEndpointSuccess = aux
 	if c.Status == 0 {
 		c.Status = 200
 	}
@@ -23,12 +22,11 @@ func (c *ConditionEndpointSuccess) UnmarshalYAML(unmarshal func(interface{}) err
 }
 
 func (c *ConditionEndpointValue) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ConditionEndpointValue
-	var aux alias
+	var aux task.ConditionEndpointValue
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*c = ConditionEndpointValue(aux)
+	c.ConditionEndpointValue = aux
 	if c.Operator == "" {
 		c.Operator = "eq"
 	}
@@ -36,12 +34,11 @@ func (c *ConditionEndpointValue) UnmarshalYAML(unmarshal func(interface{}) error
 }
 
 func (c *ConditionPrometheusMetric) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ConditionPrometheusMetric
-	var aux alias
+	var aux task.ConditionPrometheusMetric
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*c = ConditionPrometheusMetric(aux)
+	c.ConditionPrometheusMetric = aux
 	if c.Operator == "" {
 		c.Operator = "eq"
 	}
@@ -49,25 +46,32 @@ func (c *ConditionPrometheusMetric) UnmarshalYAML(unmarshal func(interface{}) er
 }
 
 func (c *ConditionK8sDeploymentReady) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ConditionK8sDeploymentReady
-	var aux alias
+	var aux task.ConditionK8sDeploymentReady
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*c = ConditionK8sDeploymentReady(aux)
+	c.ConditionK8sDeploymentReady = aux
 	if c.Namespace == "" {
 		c.Namespace = "default"
 	}
 	return nil
 }
 
-func (a *ActionEndpoint) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ActionEndpoint
-	var aux alias
+func (c *ConditionAlwaysTrue) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ConditionAlwaysTrue
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*a = ActionEndpoint(aux)
+	c.ConditionAlwaysTrue = aux
+	return nil
+}
+
+func (a *ActionEndpoint) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ActionEndpoint
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	a.ActionEndpoint = aux
 	if a.Method == "" {
 		a.Method = "GET"
 	}
@@ -96,13 +100,42 @@ func (a *ActionConfigValueSum) UnmarshalYAML(unmarshal func(interface{}) error) 
 	return nil
 }
 
-func (a *ActionK8sRestartDeployment) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ActionK8sRestartDeployment
-	var aux alias
+func (a *ActionEcho) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ActionEcho
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*a = ActionK8sRestartDeployment(aux)
+	a.ActionEcho = aux
+	return nil
+}
+
+func (a *ActionDelay) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ActionDelay
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	a.ActionDelay = aux
+	return nil
+}
+
+func (a *ActionK8sExecDeployment) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ActionK8sExecDeployment
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	a.ActionK8sExecDeployment = aux
+	if a.Namespace == "" {
+		a.Namespace = "default"
+	}
+	return nil
+}
+
+func (a *ActionK8sRestartDeployment) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux task.ActionK8sRestartDeployment
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	a.ActionK8sRestartDeployment = aux
 	if a.Namespace == "" {
 		a.Namespace = "default"
 	}
@@ -110,12 +143,11 @@ func (a *ActionK8sRestartDeployment) UnmarshalYAML(unmarshal func(interface{}) e
 }
 
 func (a *ActionK8sWaitDeploymentRollout) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ActionK8sWaitDeploymentRollout
-	var aux alias
+	var aux task.ActionK8sWaitDeploymentRollout
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*a = ActionK8sWaitDeploymentRollout(aux)
+	a.ActionK8sWaitDeploymentRollout = aux
 	if a.Namespace == "" {
 		a.Namespace = "default"
 	}
@@ -126,12 +158,11 @@ func (a *ActionK8sWaitDeploymentRollout) UnmarshalYAML(unmarshal func(interface{
 }
 
 func (a *ActionK8sUpdateConfigMap) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ActionK8sUpdateConfigMap
-	var aux alias
+	var aux task.ActionK8sUpdateConfigMap
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*a = ActionK8sUpdateConfigMap(aux)
+	a.ActionK8sUpdateConfigMap = aux
 	if a.Namespace == "" {
 		a.Namespace = "default"
 	}
@@ -139,12 +170,11 @@ func (a *ActionK8sUpdateConfigMap) UnmarshalYAML(unmarshal func(interface{}) err
 }
 
 func (a *ActionK8sScaleDeployment) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type alias ActionK8sScaleDeployment
-	var aux alias
+	var aux task.ActionK8sScaleDeployment
 	if err := unmarshal(&aux); err != nil {
 		return err
 	}
-	*a = ActionK8sScaleDeployment(aux)
+	a.ActionK8sScaleDeployment = aux
 	if a.Namespace == "" {
 		a.Namespace = "default"
 	}

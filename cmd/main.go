@@ -54,13 +54,19 @@ func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
 		logger.Fatalf("Failed to load config: %v", err)
 	}
 
+	tasks, err := utils.LoadDistributedTasks(configPath)
+
+	if err != nil {
+		logger.Fatalf("Failed to load distributed tasks: %v", err)
+	}
+
 	// Initialize leader election
 	elector, etcdClient, err := cluster.NewLeaderElector(cluster.Config{
 		EtcdEndpoints: config.EtcdEndpoints,
 		Name:          config.Name,
 		LeaderFn: func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error {
-			outbox := cluster.NewOutbox(ctx, epoch, epochKey, client, config.Tasks)
-			cluster.Conduct(ctx, config.Tasks, outbox)
+			outbox := cluster.NewOutbox(ctx, epoch, epochKey, client, tasks)
+			cluster.Conduct(ctx, tasks, outbox)
 			logger.Info("Tasks are conducted")
 			<-ctx.Done() // Wait for leadership to be lost
 			return nil
