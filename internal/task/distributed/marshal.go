@@ -195,121 +195,91 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	t.When = make([]task.Condition, 0, len(taskNode.When))
 	for i, conditionNode := range taskNode.When {
-		var bareCondition struct {
-			Type task.ConditionType `yaml:"type"`
-		}
-		if err := conditionNode.Decode(&bareCondition); err != nil {
-			return fmt.Errorf("failed to decode condition type at index %d: %w", i, err)
-		}
-
-		var condition task.Condition
-		switch bareCondition.Type {
-		case task.ConditionTypeEndpointSuccess:
-			var c ConditionEndpointSuccess
-			if err := conditionNode.Decode(&c); err != nil {
-				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
-			}
-			condition = &c
-		case task.ConditionTypeEndpointValue:
-			var c ConditionEndpointValue
-			if err := conditionNode.Decode(&c); err != nil {
-				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
-			}
-			condition = &c
-		case task.ConditionTypePrometheusMetric:
-			var c ConditionPrometheusMetric
-			if err := conditionNode.Decode(&c); err != nil {
-				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
-			}
-			condition = &c
-		case task.ConditionTypeAlwaysTrue:
-			var c ConditionAlwaysTrue
-			if err := conditionNode.Decode(&c); err != nil {
-				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
-			}
-			condition = &c
-		case task.ConditionTypeK8sDeploymentReady:
-			var c ConditionK8sDeploymentReady
-			if err := conditionNode.Decode(&c); err != nil {
-				return fmt.Errorf("failed to unmarshal condition at index %d: %w", i, err)
-			}
-			condition = &c
-		default:
-			return fmt.Errorf("unknown condition type at index %d: %s", i, bareCondition.Type)
+		condition, err := decodeCondition(conditionNode, i)
+		if err != nil {
+			return err
 		}
 		t.When = append(t.When, condition)
 	}
 
 	t.Then = make([]task.Action, 0, len(taskNode.Then))
 	for i, actionNode := range taskNode.Then {
-		var bareAction struct {
-			Type task.ActionType `yaml:"type"`
-		}
-		if err := actionNode.Decode(&bareAction); err != nil {
-			return fmt.Errorf("failed to decode action type at index %d: %w", i, err)
-		}
-
-		var action task.Action
-		switch bareAction.Type {
-		case task.ActionTypeEndpoint:
-			var a ActionEndpoint
-			if err := actionNode.Decode(&a); err != nil {
-				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
-			}
-			action = &a
-		case task.ActionTypeEcho:
-			var a ActionEcho
-			if err := actionNode.Decode(&a); err != nil {
-				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
-			}
-			action = &a
-		case task.ActionTypeDelay:
-			var a ActionDelay
-			if err := actionNode.Decode(&a); err != nil {
-				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
-			}
-			action = &a
-		case task.ActionTypeConfigValueSum:
-			var a ActionConfigValueSum
-			if err := actionNode.Decode(&a); err != nil {
-				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
-			}
-			action = &a
-		case task.ActionTypeK8sExecDeployment:
-			var a ActionK8sExecDeployment
-			if err := actionNode.Decode(&a); err != nil {
-				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
-			}
-			action = &a
-		case task.ActionTypeK8sRestartDeployment:
-			var a ActionK8sRestartDeployment
-			if err := actionNode.Decode(&a); err != nil {
-				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
-			}
-			action = &a
-		case task.ActionTypeK8sWaitDeploymentRollout:
-			var a ActionK8sWaitDeploymentRollout
-			if err := actionNode.Decode(&a); err != nil {
-				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
-			}
-			action = &a
-		case task.ActionTypeK8sUpdateConfigMap:
-			var a ActionK8sUpdateConfigMap
-			if err := actionNode.Decode(&a); err != nil {
-				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
-			}
-			action = &a
-		case task.ActionTypeK8sScaleDeployment:
-			var a ActionK8sScaleDeployment
-			if err := actionNode.Decode(&a); err != nil {
-				return fmt.Errorf("failed to unmarshal action at index %d: %w", i, err)
-			}
-			action = &a
-		default:
-			return fmt.Errorf("unknown action type at index %d: %s", i, bareAction.Type)
+		action, err := decodeAction(actionNode, i)
+		if err != nil {
+			return err
 		}
 		t.Then = append(t.Then, action)
 	}
 
 	return nil
+}
+
+func decodeCondition(node yaml.Node, index int) (task.Condition, error) {
+	var bareCondition struct {
+		Type task.ConditionType `yaml:"type"`
+	}
+	if err := node.Decode(&bareCondition); err != nil {
+		return nil, fmt.Errorf("failed to decode condition type at index %d: %w", index, err)
+	}
+
+	switch bareCondition.Type {
+	case task.ConditionTypeEndpointSuccess:
+		return decodeConditionNode(node, index, &ConditionEndpointSuccess{})
+	case task.ConditionTypeEndpointValue:
+		return decodeConditionNode(node, index, &ConditionEndpointValue{})
+	case task.ConditionTypePrometheusMetric:
+		return decodeConditionNode(node, index, &ConditionPrometheusMetric{})
+	case task.ConditionTypeAlwaysTrue:
+		return decodeConditionNode(node, index, &ConditionAlwaysTrue{})
+	case task.ConditionTypeK8sDeploymentReady:
+		return decodeConditionNode(node, index, &ConditionK8sDeploymentReady{})
+	default:
+		return nil, fmt.Errorf("unknown condition type at index %d: %s", index, bareCondition.Type)
+	}
+}
+
+func decodeConditionNode(node yaml.Node, index int, condition task.Condition) (task.Condition, error) {
+	if err := node.Decode(condition); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal condition at index %d: %w", index, err)
+	}
+	return condition, nil
+}
+
+func decodeAction(node yaml.Node, index int) (task.Action, error) {
+	var bareAction struct {
+		Type task.ActionType `yaml:"type"`
+	}
+	if err := node.Decode(&bareAction); err != nil {
+		return nil, fmt.Errorf("failed to decode action type at index %d: %w", index, err)
+	}
+
+	switch bareAction.Type {
+	case task.ActionTypeEndpoint:
+		return decodeActionNode(node, index, &ActionEndpoint{})
+	case task.ActionTypeEcho:
+		return decodeActionNode(node, index, &ActionEcho{})
+	case task.ActionTypeDelay:
+		return decodeActionNode(node, index, &ActionDelay{})
+	case task.ActionTypeConfigValueSum:
+		return decodeActionNode(node, index, &ActionConfigValueSum{})
+	case task.ActionTypeK8sExecDeployment:
+		return decodeActionNode(node, index, &ActionK8sExecDeployment{})
+	case task.ActionTypeK8sRestartDeployment:
+		return decodeActionNode(node, index, &ActionK8sRestartDeployment{})
+	case task.ActionTypeK8sWaitDeploymentRollout:
+		return decodeActionNode(node, index, &ActionK8sWaitDeploymentRollout{})
+	case task.ActionTypeK8sUpdateConfigMap:
+		return decodeActionNode(node, index, &ActionK8sUpdateConfigMap{})
+	case task.ActionTypeK8sScaleDeployment:
+		return decodeActionNode(node, index, &ActionK8sScaleDeployment{})
+	default:
+		return nil, fmt.Errorf("unknown action type at index %d: %s", index, bareAction.Type)
+	}
+}
+
+func decodeActionNode(node yaml.Node, index int, action task.Action) (task.Action, error) {
+	if err := node.Decode(action); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal action at index %d: %w", index, err)
+	}
+	return action, nil
 }
