@@ -195,7 +195,7 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	t.When = make([]task.Condition, 0, len(taskNode.When))
 	for i, conditionNode := range taskNode.When {
-		condition, err := decodeCondition(conditionNode, i)
+		condition, err := decodeCondition(&conditionNode, i)
 		if err != nil {
 			return err
 		}
@@ -204,7 +204,7 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	t.Then = make([]task.Action, 0, len(taskNode.Then))
 	for i, actionNode := range taskNode.Then {
-		action, err := decodeAction(actionNode, i)
+		action, err := decodeAction(&actionNode, i)
 		if err != nil {
 			return err
 		}
@@ -214,7 +214,7 @@ func (t *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func decodeCondition(node yaml.Node, index int) (task.Condition, error) {
+func decodeCondition(node *yaml.Node, index int) (task.Condition, error) {
 	var bareCondition struct {
 		Type task.ConditionType `yaml:"type"`
 	}
@@ -238,14 +238,14 @@ func decodeCondition(node yaml.Node, index int) (task.Condition, error) {
 	}
 }
 
-func decodeConditionNode(node yaml.Node, index int, condition task.Condition) (task.Condition, error) {
+func decodeConditionNode(node *yaml.Node, index int, condition task.Condition) (task.Condition, error) {
 	if err := node.Decode(condition); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal condition at index %d: %w", index, err)
 	}
 	return condition, nil
 }
 
-func decodeAction(node yaml.Node, index int) (task.Action, error) {
+func decodeAction(node *yaml.Node, index int) (task.Action, error) {
 	var bareAction struct {
 		Type task.ActionType `yaml:"type"`
 	}
@@ -277,7 +277,7 @@ func decodeAction(node yaml.Node, index int) (task.Action, error) {
 	}
 }
 
-func decodeActionNode(node yaml.Node, index int, action task.Action) (task.Action, error) {
+func decodeActionNode(node *yaml.Node, index int, action task.Action) (task.Action, error) {
 	if err := node.Decode(action); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal action at index %d: %w", index, err)
 	}
