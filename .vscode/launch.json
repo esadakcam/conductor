@@ -10,7 +10,7 @@
       "request": "launch",
       "mode": "auto",
       "program": "${workspaceFolder}/cmd/main.go",
-      "args": ["distributed", "${workspaceFolder}/config/config.example.yaml"],
+      "args": ["centralized", "${workspaceFolder}/config/config.centralized.yaml"],
       "env": {},
       "showLog": true
     }
