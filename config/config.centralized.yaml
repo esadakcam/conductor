@@ -1,0 +1,35 @@
+kubeconfig_locations:
+  - /Users/mehmet.esad/Projects/conductor/kubeconfig.yml
+
+tasks:
+  # - name: nginx-data value sum accross members is 30
+  #   when:
+  #     - type: "always_true"
+  #   then:
+  #     - type: "config_value_sum"
+  #       config_map: "nginx-data"
+  #       key: "value"
+  #       sum: 920
+  #       members:
+  #         - "http://localhost:8080"
+  #         # - "http://192.168.1.111:8080"
+  #         # - "http://192.168.1.112:8080"
+  #         # - "http://192.168.1.113:8080"
+
+  #     - type: delay
+  #       time: 3s
+  #     - type: "config_value_sum"
+  #       config_map: "nginx-data"
+  #       key: "value"
+  #       sum: 50
+  #       members:
+  #         - "http://localhost:8080"
+  #         # - "http://192.168.1.111:8080"
+  #         # - "http://192.168.1.112:8080"
+  #         # - "http://192.168.1.113:8080"
+  #     - type: "k8s_restart_deployment"
+  #       member: "http://localhost:8080" 
+  #       deployment: "nginx"
+  #     - type: "k8s_wait_deployment_rollout"
+  #       member: "http://localhost:8080" 
+  #       deployment: "nginx"

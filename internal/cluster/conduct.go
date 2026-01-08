@@ -11,7 +11,7 @@ import (
 
 const watchInterval = 15 * time.Second
 
-func Conduct(ctx context.Context, tasks []task.Task, outbox *Outbox) {
+func Conduct(ctx context.Context, tasks []task.Task, outbox Outbox) {
 	var wg sync.WaitGroup
 	for _, t := range tasks {
 		wg.Add(1)
@@ -23,7 +23,7 @@ func Conduct(ctx context.Context, tasks []task.Task, outbox *Outbox) {
 	wg.Wait()
 }
 
-func watch(ctx context.Context, task task.Task, outbox *Outbox) {
+func watch(ctx context.Context, task task.Task, outbox Outbox) {
 	logger.Infof("Watching task %s", task.GetName())
 	for {
 		select {
