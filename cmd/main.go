@@ -7,9 +7,12 @@ import (
 	"syscall"
 
 	"github.com/esadakcam/conductor/internal/cluster"
+	centralizedCluster "github.com/esadakcam/conductor/internal/cluster/centralized"
+	distributedCluster "github.com/esadakcam/conductor/internal/cluster/distributed"
 	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/server"
+	"github.com/esadakcam/conductor/internal/task"
 	"github.com/esadakcam/conductor/internal/utils"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -41,7 +44,31 @@ func main() {
 }
 
 func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
+	configPath := os.Args[2]
+	if configPath == "" {
+		logger.Fatal("Config path is required")
+	}
+	config, err := utils.LoadCentralizedConfig(configPath)
+	if err != nil {
+		logger.Fatalf("Failed to load config: %v", err)
+	}
 
+	var k8sClients []k8s.Client
+	for _, kubeconfigLocation := range config.KubeconfigLocations {
+		client, err := k8s.NewClient(kubeconfigLocation)
+		if err != nil {
+			logger.Fatalf("Failed to initialize Kubernetes client: %v", err)
+		}
+		k8sClients = append(k8sClients, *client)
+	}
+
+	tasks := make([]task.Task, len(config.Tasks))
+	for i, t := range config.Tasks {
+		tasks[i] = &t
+	}
+
+	outbox := centralizedCluster.NewOutbox(ctx, k8sClients)
+	cluster.Conduct(ctx, tasks, outbox)
 }
 
 func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
@@ -49,23 +76,26 @@ func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
 	if configPath == "" {
 		logger.Fatal("Config path is required")
 	}
-	config, err := utils.LoadConfig(configPath)
+	config, err := utils.LoadDistributedConfig(configPath)
 	if err != nil {
 		logger.Fatalf("Failed to load config: %v", err)
 	}
-
-	tasks, err := utils.LoadDistributedTasks(configPath)
 
 	if err != nil {
 		logger.Fatalf("Failed to load distributed tasks: %v", err)
 	}
 
+	tasks := make([]task.Task, len(config.Tasks))
+	for i, t := range config.Tasks {
+		tasks[i] = &t
+	}
+
 	// Initialize leader election
-	elector, etcdClient, err := cluster.NewLeaderElector(cluster.Config{
+	elector, etcdClient, err := distributedCluster.NewLeaderElector(distributedCluster.Config{
 		EtcdEndpoints: config.EtcdEndpoints,
 		Name:          config.Name,
 		LeaderFn: func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error {
-			outbox := cluster.NewOutbox(ctx, epoch, epochKey, client, tasks)
+			outbox := distributedCluster.NewOutbox(ctx, epoch, epochKey, client, tasks)
 			cluster.Conduct(ctx, tasks, outbox)
 			logger.Info("Tasks are conducted")
 			<-ctx.Done() // Wait for leadership to be lost
