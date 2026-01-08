@@ -6,26 +6,31 @@ import (
 
 	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/server"
-	"github.com/esadakcam/conductor/internal/task"
+	"github.com/esadakcam/conductor/internal/task/centralized"
 	"github.com/esadakcam/conductor/internal/task/distributed"
 	"gopkg.in/yaml.v3"
 )
 
-type Config struct {
+type DistributedConfig struct {
 	Name          string              `yaml:"name"`
 	EtcdEndpoints []string            `yaml:"db"`
 	Server        server.ServerConfig `yaml:"server"`
+	Tasks []distributed.Task `yaml:"tasks"`
 }
 
-// LoadConfig reads the configuration from the config file
-func LoadConfig(configPath string) (*Config, error) {
+type CentralizedConfig struct {
+	Tasks []centralized.Task `yaml:"tasks"`
+	KubeconfigLocations []string `yaml:"kubeconfig_locations"`
+}
+
+func LoadDistributedConfig(configPath string) (*DistributedConfig, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		logger.Errorf("LoadConfig: failed to read config file %s: %v", configPath, err)
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var config Config
+	var config DistributedConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		logger.Errorf("LoadConfig: failed to parse config file %s: %v", configPath, err)
 		return nil, fmt.Errorf("failed to parse config: %w", err)
@@ -50,24 +55,18 @@ func LoadConfig(configPath string) (*Config, error) {
 	return &config, nil
 }
 
-func LoadDistributedTasks(configPath string) ([]task.Task, error) {
+func LoadCentralizedConfig(configPath string) (*CentralizedConfig, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		logger.Errorf("LoadDistributedTasks: failed to read config file %s: %v", configPath, err)
+		logger.Errorf("LoadCentralizedConfig: failed to read config file %s: %v", configPath, err)
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var config struct {
-		Tasks []distributed.Task `yaml:"tasks"`
-	}
-
+	var config CentralizedConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return []task.Task{}, nil
+		logger.Errorf("LoadCentralizedConfig: failed to parse config file %s: %v", configPath, err)
+		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	var result []task.Task
-	for i := range config.Tasks {
-		result = append(result, &config.Tasks[i])
-	}
-	return result, nil
+	return &config, nil
 }

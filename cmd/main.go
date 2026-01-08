@@ -10,6 +10,7 @@ import (
 	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/server"
+	"github.com/esadakcam/conductor/internal/task"
 	"github.com/esadakcam/conductor/internal/utils"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -41,7 +42,23 @@ func main() {
 }
 
 func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
+	configPath := os.Args[2]
+	if configPath == "" {
+		logger.Fatal("Config path is required")
+	}
+	config, err := utils.LoadCentralizedConfig(configPath)
+	if err != nil {
+		logger.Fatalf("Failed to load config: %v", err)
+	}
 
+	var k8sClients []k8s.Client
+	for _, kubeconfigLocation := range config.KubeconfigLocations {
+		client, err := k8s.NewClient(kubeconfigLocation)
+		if err != nil {
+			logger.Fatalf("Failed to initialize Kubernetes client: %v", err)
+		}
+		k8sClients = append(k8sClients, *client)
+	}
 }
 
 func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
@@ -49,15 +66,14 @@ func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
 	if configPath == "" {
 		logger.Fatal("Config path is required")
 	}
-	config, err := utils.LoadConfig(configPath)
+	config, err := utils.LoadDistributedConfig(configPath)
 	if err != nil {
 		logger.Fatalf("Failed to load config: %v", err)
 	}
 
-	tasks, err := utils.LoadDistributedTasks(configPath)
-
-	if err != nil {
-		logger.Fatalf("Failed to load distributed tasks: %v", err)
+	var tasks []task.Task
+	for i := range config.Tasks {
+		tasks = append(tasks, &config.Tasks[i])
 	}
 
 	// Initialize leader election
