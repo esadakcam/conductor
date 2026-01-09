@@ -30,28 +30,28 @@ func (o *Outbox) IsTaskExecuting(ctx context.Context, taskName string) bool {
 	return o.executingTasks[taskName]
 }
 
-func (o *Outbox) ExecuteTask(task task.Task) error {
+func (o *Outbox) ExecuteTask(t task.TaskInterface) error {
 	o.mu.Lock()
-	if o.executingTasks[task.GetName()] {
+	if o.executingTasks[t.GetName()] {
 		o.mu.Unlock()
 		return nil
 	}
-	o.executingTasks[task.GetName()] = true
+	o.executingTasks[t.GetName()] = true
 	o.mu.Unlock()
 
 	payload := map[string]any{
 		"k8sClients": o.k8sClients,
 	}
-	for _, action := range task.GetActions() {
+	for _, action := range t.GetActions() {
 		if err := action.Execute(o.ctx, payload); err != nil {
 			o.mu.Lock()
-			o.executingTasks[task.GetName()] = false
+			o.executingTasks[t.GetName()] = false
 			o.mu.Unlock()
 			return err
 		}
 	}
 	o.mu.Lock()
-	o.executingTasks[task.GetName()] = false
+	o.executingTasks[t.GetName()] = false
 	o.mu.Unlock()
 	return nil
 }

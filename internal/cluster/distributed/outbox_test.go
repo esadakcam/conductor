@@ -10,9 +10,28 @@ import (
 	"time"
 
 	"github.com/esadakcam/conductor/internal/task"
-	"github.com/esadakcam/conductor/internal/task/distributed"
+	taskdistributed "github.com/esadakcam/conductor/internal/task/distributed"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
+
+// mockTask implements task.TaskInterface for testing
+type mockTask struct {
+	name string
+	when []task.Condition
+	then []task.Action
+}
+
+func (m *mockTask) GetName() string {
+	return m.name
+}
+
+func (m *mockTask) GetConditions() []task.Condition {
+	return m.when
+}
+
+func (m *mockTask) GetActions() []task.Action {
+	return m.then
+}
 
 // mockAction implements task.Action for testing
 type mockAction struct {
@@ -74,9 +93,9 @@ func TestNewOutbox(t *testing.T) {
 
 	ctx := context.Background()
 
-	tasks := []task.Task{
-		&distributed.Task{Name: "task1", Then: []task.Action{newMockAction()}},
-		&distributed.Task{Name: "task2", Then: []task.Action{newMockAction()}},
+	tasks := []task.TaskInterface{
+		&mockTask{name: "task1", then: []task.Action{newMockAction()}},
+		&mockTask{name: "task2", then: []task.Action{newMockAction()}},
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, tasks)
@@ -171,9 +190,9 @@ func TestOutbox_AddTask_NewTask(t *testing.T) {
 	ctx := context.Background()
 
 	action := newMockAction()
-	testTask := &distributed.Task{
-		Name: "new-task",
-		Then: []task.Action{action},
+	testTask := &mockTask{
+		name: "new-task",
+		then: []task.Action{action},
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
@@ -208,9 +227,9 @@ func TestOutbox_AddTask_AlreadyExecuting(t *testing.T) {
 	ctx := context.Background()
 
 	action := newMockAction()
-	testTask := &distributed.Task{
-		Name: "already-executing-task",
-		Then: []task.Action{action},
+	testTask := &mockTask{
+		name: "already-executing-task",
+		then: []task.Action{action},
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
@@ -241,9 +260,9 @@ func TestOutbox_AddTask_MultipleSteps(t *testing.T) {
 	action2 := newMockAction()
 	action3 := newMockAction()
 
-	testTask := &distributed.Task{
-		Name: "multi-step-task",
-		Then: []task.Action{action1, action2, action3},
+	testTask := &mockTask{
+		name: "multi-step-task",
+		then: []task.Action{action1, action2, action3},
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
@@ -296,9 +315,9 @@ func TestOutbox_AddTask_StepError(t *testing.T) {
 	action2.executeErr = fmt.Errorf("step 2 error")
 	action3 := newMockAction()
 
-	testTask := &distributed.Task{
-		Name: "error-task",
-		Then: []task.Action{action1, action2, action3},
+	testTask := &mockTask{
+		name: "error-task",
+		then: []task.Action{action1, action2, action3},
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
@@ -341,8 +360,8 @@ func TestOutbox_Init_WithExistingTasks(t *testing.T) {
 	}
 
 	action := newMockAction()
-	tasks := []task.Task{
-		&distributed.Task{Name: "existing-task", Then: []task.Action{action}},
+	tasks := []task.TaskInterface{
+		&mockTask{name: "existing-task", then: []task.Action{action}},
 	}
 
 	// NewOutbox should pick up the existing task and execute it
@@ -387,8 +406,8 @@ func TestOutbox_Init_ResumeFromStep(t *testing.T) {
 	action1 := newMockAction()
 	action2 := newMockAction()
 
-	tasks := []task.Task{
-		&distributed.Task{Name: "resume-task", Then: []task.Action{action0, action1, action2}},
+	tasks := []task.TaskInterface{
+		&mockTask{name: "resume-task", then: []task.Action{action0, action1, action2}},
 	}
 
 	// NewOutbox should resume from step 1
@@ -427,8 +446,8 @@ func TestOutbox_Init_NoMatchingTask(t *testing.T) {
 	}
 
 	action := newMockAction()
-	tasks := []task.Task{
-		&distributed.Task{Name: "different-task", Then: []task.Action{action}},
+	tasks := []task.TaskInterface{
+		&mockTask{name: "different-task", then: []task.Action{action}},
 	}
 
 	// NewOutbox should not pick up the orphaned task
@@ -466,9 +485,9 @@ func TestOutbox_AddTask_ConcurrentSameTask(t *testing.T) {
 		return nil
 	}
 
-	testTask := &distributed.Task{
-		Name: "concurrent-task",
-		Then: []task.Action{action},
+	testTask := &mockTask{
+		name: "concurrent-task",
+		then: []task.Action{action},
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
@@ -501,9 +520,9 @@ func TestOutbox_AddTask_EpochMismatch(t *testing.T) {
 	ctx := context.Background()
 
 	action := newMockAction()
-	testTask := &distributed.Task{
-		Name: "epoch-mismatch-task",
-		Then: []task.Action{action},
+	testTask := &mockTask{
+		name: "epoch-mismatch-task",
+		then: []task.Action{action},
 	}
 
 	// Create outbox with epoch 1
@@ -542,9 +561,9 @@ func TestOutbox_FullfillTask_ContextCancellation(t *testing.T) {
 		return ctx.Err()
 	}
 
-	testTask := &distributed.Task{
-		Name: "cancellation-task",
-		Then: []task.Action{action},
+	testTask := &mockTask{
+		name: "cancellation-task",
+		then: []task.Action{action},
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
@@ -578,7 +597,7 @@ func TestOutbox_IdempotencyId_Uniqueness(t *testing.T) {
 	action := newMockAction()
 	action.executeFn = func(ctx context.Context, payload any) error {
 		mu.Lock()
-		_, idempotencyId, err := distributed.GetPayload(payload)
+		_, idempotencyId, err := taskdistributed.GetPayload(payload)
 		if err != nil {
 			mu.Unlock()
 			return err
@@ -588,9 +607,9 @@ func TestOutbox_IdempotencyId_Uniqueness(t *testing.T) {
 		return nil
 	}
 
-	testTask := &distributed.Task{
-		Name: "idempotency-task",
-		Then: []task.Action{action},
+	testTask := &mockTask{
+		name: "idempotency-task",
+		then: []task.Action{action},
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
@@ -627,9 +646,9 @@ func TestOutbox_EmptyTask(t *testing.T) {
 	ctx := context.Background()
 
 	// Task with no actions
-	testTask := &distributed.Task{
-		Name: "empty-task",
-		Then: []task.Action{},
+	testTask := &mockTask{
+		name: "empty-task",
+		then: []task.Action{},
 	}
 
 	outbox := NewOutbox(ctx, 1, epochKey, client, nil)
@@ -675,9 +694,9 @@ func TestOutbox_Init_ExecutesWhileAddTaskSkips(t *testing.T) {
 		return nil
 	}
 
-	testTask := &distributed.Task{
-		Name: "init-task",
-		Then: []task.Action{action},
+	testTask := &mockTask{
+		name: "init-task",
+		then: []task.Action{action},
 	}
 
 	// Step 1: Pre-add task to etcd outbox (simulating existing task)
@@ -692,7 +711,7 @@ func TestOutbox_Init_ExecutesWhileAddTaskSkips(t *testing.T) {
 	}
 
 	// Step 2: Create outbox with the task - init should pick it up and start executing
-	outbox := NewOutbox(ctx, 1, epochKey, client, []task.Task{testTask})
+	outbox := NewOutbox(ctx, 1, epochKey, client, []task.TaskInterface{testTask})
 
 	// Wait for init to start executing the task
 	select {

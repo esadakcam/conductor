@@ -19,6 +19,28 @@ import (
 	"github.com/esadakcam/conductor/internal/utils/httpclient"
 )
 
+// GetType implementations for condition types
+
+func (c *ConditionEndpointSuccess) GetType() task.ConditionType {
+	return task.ConditionTypeEndpointSuccess
+}
+
+func (c *ConditionEndpointValue) GetType() task.ConditionType {
+	return task.ConditionTypeEndpointValue
+}
+
+func (c *ConditionPrometheusMetric) GetType() task.ConditionType {
+	return task.ConditionTypePrometheusMetric
+}
+
+func (c *ConditionAlwaysTrue) GetType() task.ConditionType {
+	return task.ConditionTypeAlwaysTrue
+}
+
+func (c *ConditionK8sDeploymentReady) GetType() task.ConditionType {
+	return task.ConditionTypeK8sDeploymentReady
+}
+
 func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context) (bool, error) {
 	if c.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
@@ -275,24 +297,4 @@ func (c *ConditionK8sDeploymentReady) Evaluate(ctx context.Context) (bool, error
 	}
 
 	return k8s.IsDeploymentReady(deployment, &c.Replicas)
-}
-
-func (c *ConditionEndpointSuccess) GetType() task.ConditionType {
-	return task.ConditionTypeEndpointSuccess
-}
-
-func (c *ConditionEndpointValue) GetType() task.ConditionType {
-	return task.ConditionTypeEndpointValue
-}
-
-func (c *ConditionPrometheusMetric) GetType() task.ConditionType {
-	return task.ConditionTypePrometheusMetric
-}
-
-func (c *ConditionAlwaysTrue) GetType() task.ConditionType {
-	return task.ConditionTypeAlwaysTrue
-}
-
-func (c *ConditionK8sDeploymentReady) GetType() task.ConditionType {
-	return task.ConditionTypeK8sDeploymentReady
 }
