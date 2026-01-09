@@ -12,10 +12,10 @@ type Outbox struct {
 	ctx            context.Context
 	mu             sync.Mutex
 	executingTasks map[string]bool
-	k8sClients     []k8s.Client
+	k8sClients     map[string]*k8s.Client
 }
 
-func NewOutbox(ctx context.Context, k8sClients []k8s.Client) *Outbox {
+func NewOutbox(ctx context.Context, k8sClients map[string]*k8s.Client) *Outbox {
 	return &Outbox{
 		ctx:            ctx,
 		mu:             sync.Mutex{},

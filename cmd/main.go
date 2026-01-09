@@ -53,13 +53,14 @@ func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
 		logger.Fatalf("Failed to load config: %v", err)
 	}
 
-	var k8sClients []k8s.Client
+	k8sClients := make(map[string]*k8s.Client)
 	for _, kubeconfigLocation := range config.KubeconfigLocations {
 		client, err := k8s.NewClient(kubeconfigLocation)
 		if err != nil {
 			logger.Fatalf("Failed to initialize Kubernetes client: %v", err)
 		}
-		k8sClients = append(k8sClients, *client)
+		clientHost := client.Config.Host
+		k8sClients[clientHost] = client
 	}
 
 	tasks := make([]task.TaskInterface, len(config.Tasks))
