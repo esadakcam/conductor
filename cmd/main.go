@@ -62,9 +62,9 @@ func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
 		k8sClients = append(k8sClients, *client)
 	}
 
-	tasks := make([]task.Task, len(config.Tasks))
-	for i, t := range config.Tasks {
-		tasks[i] = &t
+	tasks := make([]task.TaskInterface, len(config.Tasks))
+	for i := range config.Tasks {
+		tasks[i] = &config.Tasks[i]
 	}
 
 	outbox := centralizedCluster.NewOutbox(ctx, k8sClients)
@@ -85,9 +85,9 @@ func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
 		logger.Fatalf("Failed to load distributed tasks: %v", err)
 	}
 
-	tasks := make([]task.Task, len(config.Tasks))
-	for i, t := range config.Tasks {
-		tasks[i] = &t
+	tasks := make([]task.TaskInterface, len(config.Tasks))
+	for i := range config.Tasks {
+		tasks[i] = &config.Tasks[i]
 	}
 
 	// Initialize leader election

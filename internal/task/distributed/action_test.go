@@ -26,7 +26,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "successful GET request",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "GET",
 				},
@@ -43,7 +43,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "successful POST request with body",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "POST",
 					Body:     `{"key": "value"}`,
@@ -68,7 +68,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "successful PUT request with body",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "PUT",
 					Body:     `{"id": 1, "name": "test"}`,
@@ -90,7 +90,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "successful DELETE request",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "DELETE",
 				},
@@ -107,7 +107,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "successful request with custom headers",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "GET",
 					Headers: map[string]string{
@@ -131,7 +131,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "successful POST request with custom Content-Type header",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "POST",
 					Body:     `{"data": "test"}`,
@@ -152,7 +152,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "default method is GET when not specified",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "",
 				},
@@ -169,7 +169,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "empty endpoint returns error",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "GET",
 				},
@@ -180,7 +180,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "HTTP 4xx status code returns error",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "GET",
 				},
@@ -194,7 +194,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "HTTP 5xx status code returns error",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "GET",
 				},
@@ -208,7 +208,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "HTTP 400 Bad Request returns error",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "POST",
 					Body:     `{"invalid": "data"}`,
@@ -223,7 +223,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "successful request with empty body",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "POST",
 					Body:     "",
@@ -242,7 +242,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "successful request with multiple headers",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "GET",
 					Headers: map[string]string{
@@ -270,7 +270,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 		{
 			name: "successful POST with large body",
 			action: &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: "",
 					Method:   "POST",
 					Body:     strings.Repeat("a", 10000),
@@ -314,7 +314,7 @@ func TestActionEndpoint_Execute(t *testing.T) {
 
 func TestActionEndpoint_Execute_InvalidEndpoint(t *testing.T) {
 	action := &ActionEndpoint{
-		ActionEndpoint: task.ActionEndpoint{
+		ActionEndpointData: task.ActionEndpointData{
 			Endpoint: "http://invalid-endpoint-that-does-not-exist-12345.local",
 			Method:   "GET",
 		},
@@ -358,7 +358,7 @@ func TestActionEndpoint_Execute_HTTPStatusCodes(t *testing.T) {
 			defer server.Close()
 
 			action := &ActionEndpoint{
-				ActionEndpoint: task.ActionEndpoint{
+				ActionEndpointData: task.ActionEndpointData{
 					Endpoint: server.URL,
 					Method:   "GET",
 				},
@@ -390,7 +390,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 		{
 			name: "sum already matches target - no action needed",
 			action: &ActionConfigValueSum{
-				ActionConfigValueSum: task.ActionConfigValueSum{
+				ActionConfigValueSumData: task.ActionConfigValueSumData{
 					ConfigMapName: "test-config",
 					Key:           "replicas",
 					Sum:           10,
@@ -433,7 +433,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 		{
 			name: "sum is less than target - increment values",
 			action: &ActionConfigValueSum{
-				ActionConfigValueSum: task.ActionConfigValueSum{
+				ActionConfigValueSumData: task.ActionConfigValueSumData{
 					ConfigMapName: "test-config",
 					Key:           "replicas",
 					Sum:           10,
@@ -493,7 +493,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 		{
 			name: "sum is greater than target - decrement values",
 			action: &ActionConfigValueSum{
-				ActionConfigValueSum: task.ActionConfigValueSum{
+				ActionConfigValueSumData: task.ActionConfigValueSumData{
 					ConfigMapName: "test-config",
 					Key:           "replicas",
 					Sum:           10,
@@ -540,7 +540,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 		{
 			name: "fetch config value failure",
 			action: &ActionConfigValueSum{
-				ActionConfigValueSum: task.ActionConfigValueSum{
+				ActionConfigValueSumData: task.ActionConfigValueSumData{
 					ConfigMapName: "test-config",
 					Key:           "replicas",
 					Sum:           10,
@@ -578,7 +578,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 		{
 			name: "patch config value failure",
 			action: &ActionConfigValueSum{
-				ActionConfigValueSum: task.ActionConfigValueSum{
+				ActionConfigValueSumData: task.ActionConfigValueSumData{
 					ConfigMapName: "test-config",
 					Key:           "replicas",
 					Sum:           10,
@@ -625,7 +625,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 		{
 			name: "decrement prevents negative values",
 			action: &ActionConfigValueSum{
-				ActionConfigValueSum: task.ActionConfigValueSum{
+				ActionConfigValueSumData: task.ActionConfigValueSumData{
 					ConfigMapName: "test-config",
 					Key:           "replicas",
 					Sum:           5,
@@ -695,7 +695,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 		{
 			name: "three members with remainder distribution",
 			action: &ActionConfigValueSum{
-				ActionConfigValueSum: task.ActionConfigValueSum{
+				ActionConfigValueSumData: task.ActionConfigValueSumData{
 					ConfigMapName: "test-config",
 					Key:           "replicas",
 					Sum:           10,
@@ -731,7 +731,7 @@ func TestActionConfigValueSum_Execute(t *testing.T) {
 		{
 			name: "key not found in configmap",
 			action: &ActionConfigValueSum{
-				ActionConfigValueSum: task.ActionConfigValueSum{
+				ActionConfigValueSumData: task.ActionConfigValueSumData{
 					ConfigMapName: "test-config",
 					Key:           "nonexistent",
 					Sum:           10,
@@ -836,7 +836,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "successful execution with default namespace",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Deployment: "my-deployment",
 					Command:    []string{"echo", "hello"},
 				},
@@ -882,7 +882,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "successful execution with custom namespace",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Deployment: "my-deployment",
 					Namespace:  "custom-ns",
 					Command:    []string{"ls", "-la"},
@@ -902,7 +902,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "successful execution with container specified",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Deployment: "my-deployment",
 					Container:  "sidecar",
 					Command:    []string{"cat", "/etc/config"},
@@ -926,7 +926,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "missing deployment name returns error",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Deployment: "",
 					Command:    []string{"echo"},
 				},
@@ -939,7 +939,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "missing member returns error",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Deployment: "my-deployment",
 					Command:    []string{"echo"},
 				},
@@ -952,7 +952,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "missing command returns error",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Member:     "http://localhost:8080",
 					Deployment: "my-deployment",
 					Command:    []string{},
@@ -966,7 +966,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "nil command returns error",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Member:     "http://localhost:8080",
 					Deployment: "my-deployment",
 					Command:    nil,
@@ -980,7 +980,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "HTTP 400 Bad Request returns error",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Deployment: "my-deployment",
 					Command:    []string{"echo"},
 				},
@@ -999,7 +999,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "HTTP 404 Not Found returns error",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Deployment: "nonexistent",
 					Command:    []string{"echo"},
 				},
@@ -1015,7 +1015,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "HTTP 409 Conflict (stale epoch) returns error",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Deployment: "my-deployment",
 					Command:    []string{"echo"},
 				},
@@ -1034,7 +1034,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "HTTP 500 Internal Server Error returns error",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Deployment: "my-deployment",
 					Command:    []string{"echo"},
 				},
@@ -1050,7 +1050,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 		{
 			name: "complex command with arguments",
 			action: &ActionK8sExecDeployment{
-				ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+				ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 					Deployment: "my-deployment",
 					Command:    []string{"sh", "-c", "echo $HOME && ls -la /tmp"},
 				},
@@ -1102,7 +1102,7 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 
 func TestActionK8sExecDeployment_Execute_InvalidEndpoint(t *testing.T) {
 	action := &ActionK8sExecDeployment{
-		ActionK8sExecDeployment: task.ActionK8sExecDeployment{
+		ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
 			Member:     "http://invalid-endpoint-that-does-not-exist-12345.local",
 			Deployment: "my-deployment",
 			Command:    []string{"echo"},
@@ -1129,7 +1129,7 @@ func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 		{
 			name: "successful deployment restart with default namespace",
 			action: &ActionK8sRestartDeployment{
-				ActionK8sRestartDeployment: task.ActionK8sRestartDeployment{
+				ActionK8sRestartDeploymentData: task.ActionK8sRestartDeploymentData{
 					Deployment: "test-deployment",
 				},
 			},
@@ -1179,7 +1179,7 @@ func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 		{
 			name: "successful deployment restart with custom namespace",
 			action: &ActionK8sRestartDeployment{
-				ActionK8sRestartDeployment: task.ActionK8sRestartDeployment{
+				ActionK8sRestartDeploymentData: task.ActionK8sRestartDeploymentData{
 					Deployment: "test-deployment",
 					Namespace:  "custom-ns",
 				},
@@ -1197,7 +1197,7 @@ func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 		{
 			name: "missing deployment name returns error",
 			action: &ActionK8sRestartDeployment{
-				ActionK8sRestartDeployment: task.ActionK8sRestartDeployment{
+				ActionK8sRestartDeploymentData: task.ActionK8sRestartDeploymentData{
 					Deployment: "",
 				},
 			},
@@ -1209,7 +1209,7 @@ func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 		{
 			name: "missing member returns error",
 			action: &ActionK8sRestartDeployment{
-				ActionK8sRestartDeployment: task.ActionK8sRestartDeployment{
+				ActionK8sRestartDeploymentData: task.ActionK8sRestartDeploymentData{
 					Deployment: "test-deployment",
 				},
 			},
@@ -1221,7 +1221,7 @@ func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 		{
 			name: "patch failure returns error",
 			action: &ActionK8sRestartDeployment{
-				ActionK8sRestartDeployment: task.ActionK8sRestartDeployment{
+				ActionK8sRestartDeploymentData: task.ActionK8sRestartDeploymentData{
 					Deployment: "test-deployment",
 				},
 			},
@@ -1236,7 +1236,7 @@ func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 		{
 			name: "HTTP 409 Conflict (stale epoch) returns error",
 			action: &ActionK8sRestartDeployment{
-				ActionK8sRestartDeployment: task.ActionK8sRestartDeployment{
+				ActionK8sRestartDeploymentData: task.ActionK8sRestartDeploymentData{
 					Deployment: "test-deployment",
 				},
 			},
@@ -1292,7 +1292,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "successful wait with default namespace and timeout",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "my-deployment",
 				},
 			},
@@ -1334,7 +1334,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "successful wait with custom namespace",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "my-deployment",
 					Namespace:  "custom-ns",
 				},
@@ -1355,7 +1355,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "successful wait with custom timeout",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "my-deployment",
 					Timeout:    10 * time.Minute,
 				},
@@ -1377,7 +1377,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "successful wait with short timeout",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "my-deployment",
 					Timeout:    30 * time.Second,
 				},
@@ -1397,7 +1397,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "missing deployment name returns error",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "",
 				},
 			},
@@ -1409,7 +1409,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "missing member returns error",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "my-deployment",
 				},
 			},
@@ -1421,7 +1421,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "HTTP 400 Bad Request returns error",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "my-deployment",
 				},
 			},
@@ -1439,7 +1439,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "HTTP 404 Not Found returns error",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "nonexistent",
 				},
 			},
@@ -1454,7 +1454,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "HTTP 409 Conflict (stale epoch) returns error",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "my-deployment",
 				},
 			},
@@ -1472,7 +1472,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "HTTP 500 Internal Server Error returns error",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "my-deployment",
 				},
 			},
@@ -1487,7 +1487,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "HTTP 504 Gateway Timeout returns error",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "my-deployment",
 				},
 			},
@@ -1502,7 +1502,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 		{
 			name: "verifies idempotency header is sent",
 			action: &ActionK8sWaitDeploymentRollout{
-				ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+				ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 					Deployment: "my-deployment",
 				},
 			},
@@ -1552,7 +1552,7 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 
 func TestActionK8sWaitDeploymentRollout_Execute_InvalidEndpoint(t *testing.T) {
 	action := &ActionK8sWaitDeploymentRollout{
-		ActionK8sWaitDeploymentRollout: task.ActionK8sWaitDeploymentRollout{
+		ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
 			Member:     "http://invalid-endpoint-that-does-not-exist-12345.local",
 			Deployment: "my-deployment",
 		},
@@ -1585,7 +1585,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "successful update with default namespace",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "my-configmap",
 					Key:       "my-key",
 					Value:     "my-value",
@@ -1631,7 +1631,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "successful update with custom namespace",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "my-configmap",
 					Namespace: "custom-ns",
 					Key:       "config-key",
@@ -1651,7 +1651,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "successful update with multiline value",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "my-configmap",
 					Key:       "yaml-config",
 					Value:     "- item1\n- item2\n- item3",
@@ -1676,7 +1676,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "successful update with empty value",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "my-configmap",
 					Key:       "empty-key",
 					Value:     "",
@@ -1698,7 +1698,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "missing config_map name returns error",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "",
 					Key:       "my-key",
 					Value:     "my-value",
@@ -1712,7 +1712,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "missing member returns error",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "my-configmap",
 					Key:       "my-key",
 					Value:     "my-value",
@@ -1726,7 +1726,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "missing key returns error",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					Member:    "http://localhost:8080",
 					ConfigMap: "my-configmap",
 					Key:       "",
@@ -1741,7 +1741,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "HTTP 400 Bad Request returns error",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "my-configmap",
 					Key:       "my-key",
 					Value:     "my-value",
@@ -1761,7 +1761,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "HTTP 404 Not Found returns error",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "nonexistent",
 					Key:       "my-key",
 					Value:     "my-value",
@@ -1778,7 +1778,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "HTTP 409 Conflict (stale epoch) returns error",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "my-configmap",
 					Key:       "my-key",
 					Value:     "my-value",
@@ -1798,7 +1798,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "HTTP 500 Internal Server Error returns error",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "my-configmap",
 					Key:       "my-key",
 					Value:     "my-value",
@@ -1815,7 +1815,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "verifies idempotency header is sent",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "my-configmap",
 					Key:       "my-key",
 					Value:     "my-value",
@@ -1838,7 +1838,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 		{
 			name: "special characters in key and value",
 			action: &ActionK8sUpdateConfigMap{
-				ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+				ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 					ConfigMap: "my-configmap",
 					Key:       "config.yaml",
 					Value:     `{"key": "value", "nested": {"a": 1}}`,
@@ -1889,7 +1889,7 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 
 func TestActionK8sUpdateConfigMap_Execute_InvalidEndpoint(t *testing.T) {
 	action := &ActionK8sUpdateConfigMap{
-		ActionK8sUpdateConfigMap: task.ActionK8sUpdateConfigMap{
+		ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
 			Member:    "http://invalid-endpoint-that-does-not-exist-12345.local",
 			ConfigMap: "my-configmap",
 			Key:       "my-key",
@@ -1924,7 +1924,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "successful scaling with default namespace",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "my-deployment",
 					Replicas:   3,
 				},
@@ -1969,7 +1969,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "successful scaling with custom namespace",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "my-deployment",
 					Namespace:  "custom-ns",
 					Replicas:   5,
@@ -1995,7 +1995,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "successful scaling to zero replicas",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "my-deployment",
 					Replicas:   0,
 				},
@@ -2016,7 +2016,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "successful scaling to one replica",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "my-deployment",
 					Replicas:   1,
 				},
@@ -2037,7 +2037,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "successful scaling to many replicas",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "my-deployment",
 					Replicas:   100,
 				},
@@ -2058,7 +2058,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "missing deployment name returns error",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "",
 					Replicas:   3,
 				},
@@ -2071,7 +2071,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "missing member returns error",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "my-deployment",
 					Replicas:   3,
 				},
@@ -2084,7 +2084,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "HTTP 400 Bad Request returns error",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "my-deployment",
 					Replicas:   3,
 				},
@@ -2103,7 +2103,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "HTTP 404 Not Found returns error",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "nonexistent",
 					Replicas:   3,
 				},
@@ -2119,7 +2119,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "HTTP 409 Conflict (stale epoch) returns error",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "my-deployment",
 					Replicas:   3,
 				},
@@ -2138,7 +2138,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "HTTP 500 Internal Server Error returns error",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "my-deployment",
 					Replicas:   3,
 				},
@@ -2154,7 +2154,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		{
 			name: "verifies idempotency header is sent",
 			action: &ActionK8sScaleDeployment{
-				ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+				ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 					Deployment: "my-deployment",
 					Replicas:   3,
 				},
@@ -2204,7 +2204,7 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 
 func TestActionK8sScaleDeployment_Execute_InvalidEndpoint(t *testing.T) {
 	action := &ActionK8sScaleDeployment{
-		ActionK8sScaleDeployment: task.ActionK8sScaleDeployment{
+		ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
 			Member:     "http://invalid-endpoint-that-does-not-exist-12345.local",
 			Deployment: "my-deployment",
 			Replicas:   3,

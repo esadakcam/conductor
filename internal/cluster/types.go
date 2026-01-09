@@ -8,5 +8,5 @@ import (
 
 type Outbox interface {
 	IsTaskExecuting(ctx context.Context, taskName string) bool
-	ExecuteTask(task task.Task) error
+	ExecuteTask(task task.TaskInterface) error
 }

@@ -1,5 +1,5 @@
 kubeconfig_locations:
-  - /Users/esad/Projects/conductor/kubeconfigs/kubeconfig.yml
+  - /Users/mehmet.esad/Projects/conductor/kubeconfigs/kubeconfig.yaml
 
 tasks:
   - name: nginx-data value sum accross members is 30

@@ -20,7 +20,7 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with matching status code",
 			condition: &ConditionEndpointSuccess{
-				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+				ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
 					Endpoint: "",
 					Status:   200,
 				},
@@ -35,7 +35,7 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with non-matching status code",
 			condition: &ConditionEndpointSuccess{
-				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+				ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
 					Endpoint: "",
 					Status:   200,
 				},
@@ -50,7 +50,7 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with matching status and response body",
 			condition: &ConditionEndpointSuccess{
-				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+				ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
 					Endpoint:     "",
 					Status:       200,
 					ResponseBody: "Hello World",
@@ -66,7 +66,7 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with matching status and response body (with whitespace)",
 			condition: &ConditionEndpointSuccess{
-				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+				ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
 					Endpoint:     "",
 					Status:       200,
 					ResponseBody: "Hello World",
@@ -82,7 +82,7 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with non-matching response body",
 			condition: &ConditionEndpointSuccess{
-				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+				ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
 					Endpoint:     "",
 					Status:       200,
 					ResponseBody: "Expected Body",
@@ -98,7 +98,7 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with custom status code",
 			condition: &ConditionEndpointSuccess{
-				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+				ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
 					Endpoint: "",
 					Status:   201,
 				},
@@ -113,7 +113,7 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "empty endpoint returns error",
 			condition: &ConditionEndpointSuccess{
-				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+				ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
 					Endpoint: "", // Empty endpoint should trigger error
 					Status:   200,
 				},
@@ -125,7 +125,7 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with empty response body",
 			condition: &ConditionEndpointSuccess{
-				ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+				ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
 					Endpoint:     "",
 					Status:       204,
 					ResponseBody: "",
@@ -168,7 +168,7 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 
 func TestConditionEndpointSuccess_Evaluate_InvalidEndpoint(t *testing.T) {
 	condition := &ConditionEndpointSuccess{
-		ConditionEndpointSuccess: task.ConditionEndpointSuccess{
+		ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
 			Endpoint: "http://invalid-endpoint-that-does-not-exist-12345.local",
 			Status:   200,
 		},
@@ -195,7 +195,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with eq operator (equal)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    42,
 					Operator: "eq",
@@ -211,7 +211,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with eq operator (not equal)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    42,
 					Operator: "eq",
@@ -227,7 +227,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with ne operator (not equal)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    42,
 					Operator: "ne",
@@ -243,7 +243,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with ne operator (equal)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    42,
 					Operator: "ne",
@@ -259,7 +259,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with lt operator (less than)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    50,
 					Operator: "lt",
@@ -275,7 +275,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with lt operator (not less than)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    50,
 					Operator: "lt",
@@ -291,7 +291,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with gt operator (greater than)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    50,
 					Operator: "gt",
@@ -307,7 +307,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with gt operator (not greater than)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    50,
 					Operator: "gt",
@@ -323,7 +323,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with le operator (less than or equal - less)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    50,
 					Operator: "le",
@@ -339,7 +339,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with le operator (less than or equal - equal)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    50,
 					Operator: "le",
@@ -355,7 +355,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with le operator (greater than)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    50,
 					Operator: "le",
@@ -371,7 +371,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with ge operator (greater than or equal - greater)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    50,
 					Operator: "ge",
@@ -387,7 +387,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with ge operator (greater than or equal - equal)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    50,
 					Operator: "ge",
@@ -403,7 +403,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "failed evaluation with ge operator (less than)",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    50,
 					Operator: "ge",
@@ -419,7 +419,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "successful evaluation with whitespace in response",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    42,
 					Operator: "eq",
@@ -435,7 +435,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "empty endpoint returns error",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    42,
 					Operator: "eq",
@@ -448,7 +448,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "invalid response body (non-numeric) returns error",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    42,
 					Operator: "eq",
@@ -464,7 +464,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "unsupported operator returns error",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    42,
 					Operator: "invalid",
@@ -480,7 +480,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "negative numbers work correctly",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    -10,
 					Operator: "lt",
@@ -496,7 +496,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 		{
 			name: "zero value works correctly",
 			condition: &ConditionEndpointValue{
-				ConditionEndpointValue: task.ConditionEndpointValue{
+				ConditionEndpointValueData: task.ConditionEndpointValueData{
 					Endpoint: "",
 					Value:    0,
 					Operator: "eq",
@@ -540,7 +540,7 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 
 func TestConditionEndpointValue_Evaluate_InvalidEndpoint(t *testing.T) {
 	condition := &ConditionEndpointValue{
-		ConditionEndpointValue: task.ConditionEndpointValue{
+		ConditionEndpointValueData: task.ConditionEndpointValueData{
 			Endpoint: "http://invalid-endpoint-that-does-not-exist-12345.local",
 			Value:    42,
 			Operator: "eq",
@@ -602,7 +602,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with eq operator on gauge metric",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      42,
@@ -619,7 +619,7 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with eq operator on gauge metric (not equal)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      100,
@@ -636,7 +636,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with ne operator",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      100,
@@ -653,7 +653,7 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with ne operator (equal)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      42,
@@ -670,7 +670,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with lt operator",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      50,
@@ -687,7 +687,7 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with lt operator (not less than)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      30,
@@ -704,7 +704,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with gt operator",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      30,
@@ -721,7 +721,7 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with gt operator (not greater than)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      50,
@@ -738,7 +738,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with le operator (less)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      50,
@@ -755,7 +755,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with le operator (equal)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      42,
@@ -772,7 +772,7 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with le operator (greater)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      30,
@@ -789,7 +789,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with ge operator (greater)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      30,
@@ -806,7 +806,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with ge operator (equal)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      42,
@@ -823,7 +823,7 @@ cpu_usage 75.5
 		{
 			name: "failed evaluation with ge operator (less)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      50,
@@ -841,7 +841,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation on counter metric",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "http_requests_total",
 					Value:      100,
@@ -859,7 +859,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation on untyped metric",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "some_metric",
 					Value:      55.5,
@@ -877,7 +877,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with float value",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "cpu_usage",
 					Value:      75.5,
@@ -894,7 +894,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation with float comparison (gt)",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "cpu_usage",
 					Value:      70.0,
@@ -912,7 +912,7 @@ cpu_usage 75.5
 		{
 			name: "successful evaluation selecting specific metric from multiple",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "metric_b",
 					Value:      20,
@@ -930,7 +930,7 @@ cpu_usage 75.5
 		{
 			name: "empty endpoint returns error",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      42,
@@ -944,7 +944,7 @@ cpu_usage 75.5
 		{
 			name: "empty metric name returns error",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "will-be-replaced",
 					MetricName: "",
 					Value:      42,
@@ -961,7 +961,7 @@ cpu_usage 75.5
 		{
 			name: "metric not found returns error",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "nonexistent_metric",
 					Value:      42,
@@ -978,7 +978,7 @@ cpu_usage 75.5
 		{
 			name: "unsupported operator returns error",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      42,
@@ -995,7 +995,7 @@ cpu_usage 75.5
 		{
 			name: "unsupported metric type (histogram) returns error",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "request_duration_seconds",
 					Value:      100,
@@ -1012,7 +1012,7 @@ cpu_usage 75.5
 		{
 			name: "invalid prometheus format returns error",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      42,
@@ -1029,7 +1029,7 @@ cpu_usage 75.5
 		{
 			name: "non-200 status code returns error",
 			condition: &ConditionPrometheusMetric{
-				ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+				ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 					Endpoint:   "",
 					MetricName: "ues_active",
 					Value:      42,
@@ -1076,7 +1076,7 @@ cpu_usage 75.5
 
 func TestConditionPrometheusMetric_Evaluate_InvalidEndpoint(t *testing.T) {
 	condition := &ConditionPrometheusMetric{
-		ConditionPrometheusMetric: task.ConditionPrometheusMetric{
+		ConditionPrometheusMetricData: task.ConditionPrometheusMetricData{
 			Endpoint:   "http://invalid-endpoint-that-does-not-exist-12345.local",
 			MetricName: "ues_active",
 			Value:      42,
@@ -1302,7 +1302,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment is ready with expected replicas",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "",
 					Deployment: "test-deployment",
 					Namespace:  "default",
@@ -1319,7 +1319,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment is rolling out",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "",
 					Deployment: "test-deployment",
 					Namespace:  "default",
@@ -1336,7 +1336,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment has pending pods",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "",
 					Deployment: "test-deployment",
 					Namespace:  "default",
@@ -1353,7 +1353,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment has stale observed generation",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "",
 					Deployment: "test-deployment",
 					Namespace:  "default",
@@ -1370,7 +1370,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment has wrong replica count",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "",
 					Deployment: "test-deployment",
 					Namespace:  "default",
@@ -1387,7 +1387,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "deployment has no status yet",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "",
 					Deployment: "test-deployment",
 					Namespace:  "default",
@@ -1404,7 +1404,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "empty member returns error",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "",
 					Deployment: "test-deployment",
 					Namespace:  "default",
@@ -1418,7 +1418,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "empty deployment returns error",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "will-be-replaced",
 					Deployment: "",
 					Namespace:  "default",
@@ -1435,7 +1435,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "server returns error status",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "",
 					Deployment: "test-deployment",
 					Namespace:  "default",
@@ -1452,7 +1452,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "server returns invalid JSON",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "",
 					Deployment: "test-deployment",
 					Namespace:  "default",
@@ -1469,7 +1469,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 		{
 			name: "default namespace is used when not specified",
 			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 					Member:     "",
 					Deployment: "test-deployment",
 					Namespace:  "",
@@ -1521,7 +1521,7 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 
 func TestConditionK8sDeploymentReady_Evaluate_InvalidEndpoint(t *testing.T) {
 	condition := &ConditionK8sDeploymentReady{
-		ConditionK8sDeploymentReady: task.ConditionK8sDeploymentReady{
+		ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 			Member:     "http://invalid-endpoint-that-does-not-exist-12345.local",
 			Deployment: "test-deployment",
 			Namespace:  "default",

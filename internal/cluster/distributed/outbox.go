@@ -30,7 +30,7 @@ type Outbox struct {
 	executingTasks map[string]bool
 }
 
-func NewOutbox(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client, tasks []task.Task) *Outbox {
+func NewOutbox(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client, tasks []task.TaskInterface) *Outbox {
 	o := &Outbox{
 		ctx:            ctx,
 		epoch:          epoch,
@@ -59,7 +59,7 @@ func (o *Outbox) IsTaskExecuting(ctx context.Context, taskName string) bool {
 	return true
 }
 
-func (o *Outbox) ExecuteTask(toExecute task.Task) error {
+func (o *Outbox) ExecuteTask(toExecute task.TaskInterface) error {
 	o.mu.Lock()
 	if o.executingTasks[toExecute.GetName()] {
 		o.mu.Unlock()
@@ -99,10 +99,10 @@ func (o *Outbox) ExecuteTask(toExecute task.Task) error {
 	return nil
 }
 
-func (o *Outbox) init(tasks []task.Task) {
+func (o *Outbox) init(tasks []task.TaskInterface) {
 	logger.Infof("Initializing outbox with %d tasks", len(tasks))
 	for _, t := range tasks {
-		go func(t task.Task) {
+		go func(t task.TaskInterface) {
 			existing, err := o.client.Get(o.ctx, fmt.Sprintf("%s/%s", outboxKey, t.GetName()))
 			if err != nil {
 				logger.Errorf("failed to get existing task: %v", err)
@@ -117,8 +117,8 @@ func (o *Outbox) init(tasks []task.Task) {
 	}
 }
 
-func (o *Outbox) fulfillTaskFromOutbox(task task.Task) error {
-	existing, err := o.client.Get(o.ctx, fmt.Sprintf("%s/%s", outboxKey, task.GetName()))
+func (o *Outbox) fulfillTaskFromOutbox(t task.TaskInterface) error {
+	existing, err := o.client.Get(o.ctx, fmt.Sprintf("%s/%s", outboxKey, t.GetName()))
 	if err != nil {
 		logger.Errorf("failed to get existing task: %v", err)
 		return err
@@ -127,7 +127,7 @@ func (o *Outbox) fulfillTaskFromOutbox(task task.Task) error {
 		return nil
 	}
 	o.mu.Lock()
-	o.executingTasks[task.GetName()] = true
+	o.executingTasks[t.GetName()] = true
 	o.mu.Unlock()
 	var item OutboxItem
 	err = json.Unmarshal(existing.Kvs[0].Value, &item)
@@ -136,12 +136,12 @@ func (o *Outbox) fulfillTaskFromOutbox(task task.Task) error {
 		return err
 	}
 
-	for i := item.TaskStep; i < int64(len(task.GetActions())); i++ {
+	for i := item.TaskStep; i < int64(len(t.GetActions())); i++ {
 		payload := map[string]any{
 			"idempotencyId": item.ID.String(),
 			"epoch":         o.epoch,
 		}
-		err := task.GetActions()[i].Execute(o.ctx, payload)
+		err := t.GetActions()[i].Execute(o.ctx, payload)
 		if err != nil {
 			logger.Errorf("failed to execute task step %d: %v", i, err)
 			return err
@@ -158,15 +158,15 @@ func (o *Outbox) fulfillTaskFromOutbox(task task.Task) error {
 		}
 		cmp := clientv3.Compare(clientv3.Value(o.epochKey), "=", fmt.Sprintf("%d", o.epoch))
 		var then []clientv3.Op
-		if i < int64(len(task.GetActions()))-1 {
+		if i < int64(len(t.GetActions()))-1 {
 			// Not the last step: update the outbox entry with new step
 			then = []clientv3.Op{
-				clientv3.OpPut(fmt.Sprintf("%s/%s", outboxKey, task.GetName()), string(json)),
+				clientv3.OpPut(fmt.Sprintf("%s/%s", outboxKey, t.GetName()), string(json)),
 			}
 		} else {
 			// Last step: remove from outbox
 			then = []clientv3.Op{
-				clientv3.OpDelete(fmt.Sprintf("%s/%s", outboxKey, task.GetName())),
+				clientv3.OpDelete(fmt.Sprintf("%s/%s", outboxKey, t.GetName())),
 			}
 		}
 		_, err = o.client.Txn(o.ctx).If(cmp).Then(then...).Commit()
@@ -177,7 +177,7 @@ func (o *Outbox) fulfillTaskFromOutbox(task task.Task) error {
 		item = newItem
 	}
 	o.mu.Lock()
-	o.executingTasks[task.GetName()] = false
+	o.executingTasks[t.GetName()] = false
 	o.mu.Unlock()
 	return nil
 }
