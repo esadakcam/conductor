@@ -181,20 +181,24 @@ func (m *mockK8sScaleDeploymentAction) GetType() ActionType {
 // testFactory implements TypeFactory for testing
 type testFactory struct{}
 
-func (f testFactory) NewConditionEndpointSuccess() Condition    { return &mockCondition{} }
-func (f testFactory) NewConditionEndpointValue() Condition      { return &mockEndpointValueCondition{} }
-func (f testFactory) NewConditionPrometheusMetric() Condition   { return &mockPrometheusCondition{} }
-func (f testFactory) NewConditionAlwaysTrue() Condition         { return &mockAlwaysTrueCondition{} }
-func (f testFactory) NewConditionK8sDeploymentReady() Condition { return &mockK8sDeploymentReadyCondition{} }
-func (f testFactory) NewActionEndpoint() Action                 { return &mockAction{} }
-func (f testFactory) NewActionEcho() Action                     { return &mockEchoAction{} }
-func (f testFactory) NewActionDelay() Action                    { return &mockDelayAction{} }
-func (f testFactory) NewActionConfigValueSum() Action           { return &mockConfigValueSumAction{} }
-func (f testFactory) NewActionK8sExecDeployment() Action        { return &mockK8sExecDeploymentAction{} }
-func (f testFactory) NewActionK8sRestartDeployment() Action     { return &mockK8sRestartDeploymentAction{} }
-func (f testFactory) NewActionK8sWaitDeploymentRollout() Action { return &mockK8sWaitDeploymentRolloutAction{} }
-func (f testFactory) NewActionK8sUpdateConfigMap() Action       { return &mockK8sUpdateConfigMapAction{} }
-func (f testFactory) NewActionK8sScaleDeployment() Action       { return &mockK8sScaleDeploymentAction{} }
+func (f testFactory) NewConditionEndpointSuccess() Condition  { return &mockCondition{} }
+func (f testFactory) NewConditionEndpointValue() Condition    { return &mockEndpointValueCondition{} }
+func (f testFactory) NewConditionPrometheusMetric() Condition { return &mockPrometheusCondition{} }
+func (f testFactory) NewConditionAlwaysTrue() Condition       { return &mockAlwaysTrueCondition{} }
+func (f testFactory) NewConditionK8sDeploymentReady() Condition {
+	return &mockK8sDeploymentReadyCondition{}
+}
+func (f testFactory) NewActionEndpoint() Action             { return &mockAction{} }
+func (f testFactory) NewActionEcho() Action                 { return &mockEchoAction{} }
+func (f testFactory) NewActionDelay() Action                { return &mockDelayAction{} }
+func (f testFactory) NewActionConfigValueSum() Action       { return &mockConfigValueSumAction{} }
+func (f testFactory) NewActionK8sExecDeployment() Action    { return &mockK8sExecDeploymentAction{} }
+func (f testFactory) NewActionK8sRestartDeployment() Action { return &mockK8sRestartDeploymentAction{} }
+func (f testFactory) NewActionK8sWaitDeploymentRollout() Action {
+	return &mockK8sWaitDeploymentRolloutAction{}
+}
+func (f testFactory) NewActionK8sUpdateConfigMap() Action { return &mockK8sUpdateConfigMapAction{} }
+func (f testFactory) NewActionK8sScaleDeployment() Action { return &mockK8sScaleDeploymentAction{} }
 
 // configRaw is used for the first pass of unmarshalling
 type configRaw struct {

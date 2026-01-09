@@ -65,20 +65,24 @@ type ActionK8sScaleDeployment struct {
 // Factory implements task.TypeFactory for distributed mode
 type Factory struct{}
 
-func (f Factory) NewConditionEndpointSuccess() task.Condition    { return &ConditionEndpointSuccess{} }
-func (f Factory) NewConditionEndpointValue() task.Condition      { return &ConditionEndpointValue{} }
-func (f Factory) NewConditionPrometheusMetric() task.Condition   { return &ConditionPrometheusMetric{} }
-func (f Factory) NewConditionAlwaysTrue() task.Condition         { return &ConditionAlwaysTrue{} }
-func (f Factory) NewConditionK8sDeploymentReady() task.Condition { return &ConditionK8sDeploymentReady{} }
-func (f Factory) NewActionEndpoint() task.Action                 { return &ActionEndpoint{} }
-func (f Factory) NewActionEcho() task.Action                     { return &ActionEcho{} }
-func (f Factory) NewActionDelay() task.Action                    { return &ActionDelay{} }
-func (f Factory) NewActionConfigValueSum() task.Action           { return &ActionConfigValueSum{} }
-func (f Factory) NewActionK8sExecDeployment() task.Action        { return &ActionK8sExecDeployment{} }
-func (f Factory) NewActionK8sRestartDeployment() task.Action     { return &ActionK8sRestartDeployment{} }
-func (f Factory) NewActionK8sWaitDeploymentRollout() task.Action { return &ActionK8sWaitDeploymentRollout{} }
-func (f Factory) NewActionK8sUpdateConfigMap() task.Action       { return &ActionK8sUpdateConfigMap{} }
-func (f Factory) NewActionK8sScaleDeployment() task.Action       { return &ActionK8sScaleDeployment{} }
+func (f Factory) NewConditionEndpointSuccess() task.Condition  { return &ConditionEndpointSuccess{} }
+func (f Factory) NewConditionEndpointValue() task.Condition    { return &ConditionEndpointValue{} }
+func (f Factory) NewConditionPrometheusMetric() task.Condition { return &ConditionPrometheusMetric{} }
+func (f Factory) NewConditionAlwaysTrue() task.Condition       { return &ConditionAlwaysTrue{} }
+func (f Factory) NewConditionK8sDeploymentReady() task.Condition {
+	return &ConditionK8sDeploymentReady{}
+}
+func (f Factory) NewActionEndpoint() task.Action             { return &ActionEndpoint{} }
+func (f Factory) NewActionEcho() task.Action                 { return &ActionEcho{} }
+func (f Factory) NewActionDelay() task.Action                { return &ActionDelay{} }
+func (f Factory) NewActionConfigValueSum() task.Action       { return &ActionConfigValueSum{} }
+func (f Factory) NewActionK8sExecDeployment() task.Action    { return &ActionK8sExecDeployment{} }
+func (f Factory) NewActionK8sRestartDeployment() task.Action { return &ActionK8sRestartDeployment{} }
+func (f Factory) NewActionK8sWaitDeploymentRollout() task.Action {
+	return &ActionK8sWaitDeploymentRollout{}
+}
+func (f Factory) NewActionK8sUpdateConfigMap() task.Action { return &ActionK8sUpdateConfigMap{} }
+func (f Factory) NewActionK8sScaleDeployment() task.Action { return &ActionK8sScaleDeployment{} }
 
 // GetFactory returns the type factory for distributed mode
 func GetFactory() task.TypeFactory {
