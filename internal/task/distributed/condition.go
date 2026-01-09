@@ -41,7 +41,7 @@ func (c *ConditionK8sDeploymentReady) GetType() task.ConditionType {
 	return task.ConditionTypeK8sDeploymentReady
 }
 
-func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context) (bool, error) {
+func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context, payload any) (bool, error) {
 	if c.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
 		logger.Error("ConditionEndpointSuccess: endpoint is required")
@@ -85,7 +85,7 @@ func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func (c *ConditionEndpointValue) Evaluate(ctx context.Context) (bool, error) {
+func (c *ConditionEndpointValue) Evaluate(ctx context.Context, payload any) (bool, error) {
 	if c.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
 		logger.Error("ConditionEndpointValue: endpoint is required")
@@ -143,7 +143,7 @@ func (c *ConditionEndpointValue) Evaluate(ctx context.Context) (bool, error) {
 	}
 }
 
-func (c *ConditionPrometheusMetric) Evaluate(ctx context.Context) (bool, error) {
+func (c *ConditionPrometheusMetric) Evaluate(ctx context.Context, payload any) (bool, error) {
 	if c.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
 		logger.Error("ConditionPrometheusMetric: endpoint is required")
@@ -241,11 +241,11 @@ func parsePrometheusMetric(body []byte, metricName string) (float64, error) {
 	}
 }
 
-func (c *ConditionAlwaysTrue) Evaluate(ctx context.Context) (bool, error) {
+func (c *ConditionAlwaysTrue) Evaluate(ctx context.Context, payload any) (bool, error) {
 	return true, nil
 }
 
-func (c *ConditionK8sDeploymentReady) Evaluate(ctx context.Context) (bool, error) {
+func (c *ConditionK8sDeploymentReady) Evaluate(ctx context.Context, payload any) (bool, error) {
 	if c.Member == "" {
 		err := fmt.Errorf("member is required")
 		logger.Error("ConditionK8sDeploymentReady: member is required")

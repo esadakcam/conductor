@@ -16,7 +16,7 @@ type mockCondition struct {
 func (m *mockCondition) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalConditionEndpointSuccess(unmarshal, &m.ConditionEndpointSuccessData)
 }
-func (m *mockCondition) Evaluate(ctx context.Context) (bool, error) { return true, nil }
+func (m *mockCondition) Evaluate(ctx context.Context, payload any) (bool, error) { return true, nil }
 func (m *mockCondition) GetType() ConditionType                     { return ConditionTypeEndpointSuccess }
 
 // mockAlwaysTrueCondition implements the Condition interface for testing
@@ -27,7 +27,7 @@ type mockAlwaysTrueCondition struct {
 func (m *mockAlwaysTrueCondition) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalConditionAlwaysTrue(unmarshal, &m.ConditionAlwaysTrueData)
 }
-func (m *mockAlwaysTrueCondition) Evaluate(ctx context.Context) (bool, error) { return true, nil }
+func (m *mockAlwaysTrueCondition) Evaluate(ctx context.Context, payload any) (bool, error) { return true, nil }
 func (m *mockAlwaysTrueCondition) GetType() ConditionType                     { return ConditionTypeAlwaysTrue }
 
 // mockEndpointValueCondition implements the Condition interface for testing
@@ -38,7 +38,7 @@ type mockEndpointValueCondition struct {
 func (m *mockEndpointValueCondition) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalConditionEndpointValue(unmarshal, &m.ConditionEndpointValueData)
 }
-func (m *mockEndpointValueCondition) Evaluate(ctx context.Context) (bool, error) { return true, nil }
+func (m *mockEndpointValueCondition) Evaluate(ctx context.Context, payload any) (bool, error) { return true, nil }
 func (m *mockEndpointValueCondition) GetType() ConditionType                     { return ConditionTypeEndpointValue }
 
 // mockPrometheusCondition implements the Condition interface for testing
@@ -49,7 +49,7 @@ type mockPrometheusCondition struct {
 func (m *mockPrometheusCondition) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalConditionPrometheusMetric(unmarshal, &m.ConditionPrometheusMetricData)
 }
-func (m *mockPrometheusCondition) Evaluate(ctx context.Context) (bool, error) { return true, nil }
+func (m *mockPrometheusCondition) Evaluate(ctx context.Context, payload any) (bool, error) { return true, nil }
 func (m *mockPrometheusCondition) GetType() ConditionType                     { return ConditionTypePrometheusMetric }
 
 // mockK8sDeploymentReadyCondition implements the Condition interface for testing
@@ -60,7 +60,7 @@ type mockK8sDeploymentReadyCondition struct {
 func (m *mockK8sDeploymentReadyCondition) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalConditionK8sDeploymentReady(unmarshal, &m.ConditionK8sDeploymentReadyData)
 }
-func (m *mockK8sDeploymentReadyCondition) Evaluate(ctx context.Context) (bool, error) {
+func (m *mockK8sDeploymentReadyCondition) Evaluate(ctx context.Context, payload any) (bool, error) {
 	return true, nil
 }
 func (m *mockK8sDeploymentReadyCondition) GetType() ConditionType {

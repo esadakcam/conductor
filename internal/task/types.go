@@ -60,7 +60,7 @@ type TaskInterface interface {
 }
 
 type Condition interface {
-	Evaluate(ctx context.Context) (bool, error)
+	Evaluate(ctx context.Context, payload any) (bool, error)
 	GetType() ConditionType
 }
 

@@ -39,7 +39,7 @@ func watch(ctx context.Context, task task.TaskInterface, outbox Outbox) {
 			allConditionsMet := true
 			// TODO: Parallelize condition evaluation
 			for i, condition := range task.GetConditions() {
-				result, err := condition.Evaluate(ctx)
+				result, err := condition.Evaluate(ctx, nil)
 				if err != nil {
 					logger.Errorf("Error evaluating condition %d for task %s: %v", i, task.GetName(), err)
 					allConditionsMet = false
