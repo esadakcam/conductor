@@ -213,49 +213,13 @@ func unmarshalTasks(data []byte, factory TypeFactory) ([]Task, error) {
 
 	tasks := make([]Task, 0, len(rawConfig.Tasks))
 	for i, taskNode := range rawConfig.Tasks {
-		t, err := unmarshalTask(&taskNode, i, factory)
+		t, err := UnmarshalTaskFromNode(&taskNode, i, factory)
 		if err != nil {
 			return nil, err
 		}
 		tasks = append(tasks, *t)
 	}
 	return tasks, nil
-}
-
-func unmarshalTask(node *yaml.Node, index int, factory TypeFactory) (*Task, error) {
-	var taskNode struct {
-		Name string      `yaml:"name"`
-		When []yaml.Node `yaml:"when"`
-		Then []yaml.Node `yaml:"then"`
-	}
-
-	if err := node.Decode(&taskNode); err != nil {
-		return nil, err
-	}
-
-	t := &Task{
-		Name: taskNode.Name,
-		When: make([]Condition, 0, len(taskNode.When)),
-		Then: make([]Action, 0, len(taskNode.Then)),
-	}
-
-	for i, conditionNode := range taskNode.When {
-		condition, err := DecodeCondition(&conditionNode, i, factory)
-		if err != nil {
-			return nil, err
-		}
-		t.When = append(t.When, condition)
-	}
-
-	for i, actionNode := range taskNode.Then {
-		action, err := DecodeAction(&actionNode, i, factory)
-		if err != nil {
-			return nil, err
-		}
-		t.Then = append(t.Then, action)
-	}
-
-	return t, nil
 }
 
 func TestUnmarshalCentralizedConfig(t *testing.T) {
