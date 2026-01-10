@@ -1,12 +1,9 @@
 package centralized
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -14,70 +11,9 @@ import (
 	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/task"
-	"github.com/esadakcam/conductor/internal/utils/httpclient"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 )
-
-func (a *ActionEndpoint) Execute(ctx context.Context, payload any) error {
-	if a.Endpoint == "" {
-		err := fmt.Errorf("endpoint is required")
-		logger.Error("ActionEndpoint: endpoint is required")
-		return err
-	}
-
-	// Default to GET if method is not specified
-	method := a.Method
-	if method == "" {
-		method = "GET"
-	}
-
-	// Create request body if provided
-	var reqBody io.Reader
-	if a.Body != "" {
-		reqBody = bytes.NewBufferString(a.Body)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, method, a.Endpoint, reqBody)
-	if err != nil {
-		logger.Errorf("ActionEndpoint: failed to create request to %s: %v", a.Endpoint, err)
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Add headers if provided
-	for key, value := range a.Headers {
-		req.Header.Set(key, value)
-	}
-
-	// Set Content-Type header if body is provided and Content-Type is not already set
-	if a.Body != "" && req.Header.Get("Content-Type") == "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	// Execute request
-	client := httpclient.Get()
-
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.Errorf("ActionEndpoint: failed to execute request to %s: %v", a.Endpoint, err)
-		return fmt.Errorf("failed to execute request to %s: %w", a.Endpoint, err)
-	}
-	defer resp.Body.Close()
-
-	// Check for HTTP error status codes (4xx, 5xx)
-	if resp.StatusCode >= 400 {
-		err := fmt.Errorf("request failed with status code %d", resp.StatusCode)
-		logger.Errorf("ActionEndpoint: request to %s failed with status code %d", a.Endpoint, resp.StatusCode)
-		return err
-	}
-
-	return nil
-}
-
-func (a *ActionEndpoint) GetType() task.ActionType {
-	return task.ActionTypeEndpoint
-}
 
 func (a *ActionConfigValueSum) Execute(ctx context.Context, payload any) error {
 	k8sClients, err := getK8sClients(payload)
@@ -204,29 +140,6 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, k8
 
 func (a *ActionConfigValueSum) GetType() task.ActionType {
 	return task.ActionTypeConfigValueSum
-}
-
-func (a *ActionEcho) Execute(ctx context.Context, payload any) error {
-	logger.Info(a.Message)
-	return nil
-}
-
-func (a *ActionEcho) GetType() task.ActionType {
-	return task.ActionTypeEcho
-}
-
-func (a *ActionDelay) Execute(ctx context.Context, payload any) error {
-	logger.Infof("ActionDelay: sleeping for %s", a.Time)
-	select {
-	case <-time.After(a.Time):
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (a *ActionDelay) GetType() task.ActionType {
-	return task.ActionTypeDelay
 }
 
 func (a *ActionK8sExecDeployment) Execute(ctx context.Context, payload any) error {

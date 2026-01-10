@@ -2,41 +2,28 @@ package distributed
 
 import (
 	"github.com/esadakcam/conductor/internal/task"
+	"github.com/esadakcam/conductor/internal/task/common"
 )
 
 // Condition types wrapping base types
-type ConditionEndpointSuccess struct {
-	task.ConditionEndpointSuccessData
-}
+type ConditionEndpointSuccess = common.ConditionEndpointSuccess
 
-type ConditionAlwaysTrue struct {
-	task.ConditionAlwaysTrueData
-}
+type ConditionAlwaysTrue = common.ConditionAlwaysTrue
 
-type ConditionEndpointValue struct {
-	task.ConditionEndpointValueData
-}
+type ConditionEndpointValue = common.ConditionEndpointValue
 
-type ConditionPrometheusMetric struct {
-	task.ConditionPrometheusMetricData
-}
+type ConditionPrometheusMetric = common.ConditionPrometheusMetric
 
 type ConditionK8sDeploymentReady struct {
 	task.ConditionK8sDeploymentReadyData
 }
 
 // Action types wrapping base types
-type ActionEndpoint struct {
-	task.ActionEndpointData
-}
+type ActionEndpoint = common.ActionEndpoint
 
-type ActionEcho struct {
-	task.ActionEchoData
-}
+type ActionEcho = common.ActionEcho
 
-type ActionDelay struct {
-	task.ActionDelayData
-}
+type ActionDelay = common.ActionDelay
 
 type ActionConfigValueSum struct {
 	task.ActionConfigValueSumData

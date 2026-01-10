@@ -6,42 +6,14 @@ import (
 
 // UnmarshalYAML implementations for condition types
 
-func (c *ConditionEndpointSuccess) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	return task.UnmarshalConditionEndpointSuccess(unmarshal, &c.ConditionEndpointSuccessData)
-}
-
-func (c *ConditionEndpointValue) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	return task.UnmarshalConditionEndpointValue(unmarshal, &c.ConditionEndpointValueData)
-}
-
-func (c *ConditionPrometheusMetric) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	return task.UnmarshalConditionPrometheusMetric(unmarshal, &c.ConditionPrometheusMetricData)
-}
-
 func (c *ConditionK8sDeploymentReady) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return task.UnmarshalConditionK8sDeploymentReady(unmarshal, &c.ConditionK8sDeploymentReadyData)
 }
 
-func (c *ConditionAlwaysTrue) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	return task.UnmarshalConditionAlwaysTrue(unmarshal, &c.ConditionAlwaysTrueData)
-}
-
 // UnmarshalYAML implementations for action types
-
-func (a *ActionEndpoint) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	return task.UnmarshalActionEndpoint(unmarshal, &a.ActionEndpointData)
-}
 
 func (a *ActionConfigValueSum) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return task.UnmarshalActionConfigValueSum(unmarshal, &a.ActionConfigValueSumData)
-}
-
-func (a *ActionEcho) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	return task.UnmarshalActionEcho(unmarshal, &a.ActionEchoData)
-}
-
-func (a *ActionDelay) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	return task.UnmarshalActionDelay(unmarshal, &a.ActionDelayData)
 }
 
 func (a *ActionK8sExecDeployment) UnmarshalYAML(unmarshal func(interface{}) error) error {
