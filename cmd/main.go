@@ -12,7 +12,6 @@ import (
 	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/server"
-	"github.com/esadakcam/conductor/internal/task"
 	"github.com/esadakcam/conductor/internal/utils"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -63,10 +62,7 @@ func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
 		k8sClients[clientHost] = client
 	}
 
-	tasks := make([]task.TaskInterface, len(config.Tasks))
-	for i := range config.Tasks {
-		tasks[i] = &config.Tasks[i]
-	}
+	tasks := config.Tasks
 
 	outbox := centralizedCluster.NewOutbox(ctx, k8sClients)
 	cluster.Conduct(ctx, tasks, outbox)
@@ -86,10 +82,7 @@ func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
 		logger.Fatalf("Failed to load distributed tasks: %v", err)
 	}
 
-	tasks := make([]task.TaskInterface, len(config.Tasks))
-	for i := range config.Tasks {
-		tasks[i] = &config.Tasks[i]
-	}
+	tasks := config.Tasks
 
 	// Initialize leader election
 	elector, etcdClient, err := distributedCluster.NewLeaderElector(distributedCluster.Config{

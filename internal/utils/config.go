@@ -13,15 +13,15 @@ import (
 )
 
 type DistributedConfig struct {
-	Name          string              `yaml:"name"`
-	EtcdEndpoints []string            `yaml:"db"`
-	Server        server.ServerConfig `yaml:"server"`
-	Tasks         []task.Task         `yaml:"tasks"`
+	Name          string               `yaml:"name"`
+	EtcdEndpoints []string             `yaml:"db"`
+	Server        server.ServerConfig  `yaml:"server"`
+	Tasks         []task.TaskInterface `yaml:"tasks"`
 }
 
 type CentralizedConfig struct {
-	Tasks               []task.Task `yaml:"tasks"`
-	KubeconfigLocations []string    `yaml:"kubeconfig_locations"`
+	Tasks               []task.TaskInterface `yaml:"tasks"`
+	KubeconfigLocations []string             `yaml:"kubeconfig_locations"`
 }
 
 // distributedConfigRaw is used for the first pass of unmarshalling
@@ -59,13 +59,13 @@ func LoadDistributedConfig(configPath string) (*DistributedConfig, error) {
 
 	// Unmarshal tasks using the distributed factory
 	factory := distributed.GetFactory()
-	config.Tasks = make([]task.Task, 0, len(rawConfig.Tasks))
+	config.Tasks = make([]task.TaskInterface, 0, len(rawConfig.Tasks))
 	for i, taskNode := range rawConfig.Tasks {
 		t, err := task.UnmarshalTaskFromNode(&taskNode, i, factory)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal task %d: %w", i, err)
 		}
-		config.Tasks = append(config.Tasks, *t)
+		config.Tasks = append(config.Tasks, t)
 	}
 
 	if len(config.EtcdEndpoints) == 0 {
@@ -106,13 +106,13 @@ func LoadCentralizedConfig(configPath string) (*CentralizedConfig, error) {
 
 	// Unmarshal tasks using the centralized factory
 	factory := centralized.GetFactory()
-	config.Tasks = make([]task.Task, 0, len(rawConfig.Tasks))
+	config.Tasks = make([]task.TaskInterface, 0, len(rawConfig.Tasks))
 	for i, taskNode := range rawConfig.Tasks {
 		t, err := task.UnmarshalTaskFromNode(&taskNode, i, factory)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal task %d: %w", i, err)
 		}
-		config.Tasks = append(config.Tasks, *t)
+		config.Tasks = append(config.Tasks, t)
 	}
 
 	return config, nil
