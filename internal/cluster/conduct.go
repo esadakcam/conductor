@@ -35,11 +35,15 @@ func watch(ctx context.Context, task task.TaskInterface, outbox Outbox) {
 				continue
 			}
 
+			// Get payload from outbox for condition evaluation
+			// This allows conditions to access environment resources (e.g., k8s clients in centralized mode)
+			payload := outbox.GetPayload()
+
 			// Evaluate all conditions (AND logic)
 			allConditionsMet := true
 			// TODO: Parallelize condition evaluation
 			for i, condition := range task.GetConditions() {
-				result, err := condition.Evaluate(ctx)
+				result, err := condition.Evaluate(ctx, payload)
 				if err != nil {
 					logger.Errorf("Error evaluating condition %d for task %s: %v", i, task.GetName(), err)
 					allConditionsMet = false

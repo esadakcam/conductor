@@ -37,9 +37,9 @@ type PodExecResult struct {
 
 // Client wraps the Kubernetes dynamic client
 type Client struct {
+	Config    *rest.Config
 	client    dynamic.Interface
 	clientset *kubernetes.Clientset
-	config    *rest.Config
 }
 
 // NewClient creates a new Client
@@ -90,7 +90,7 @@ func NewClient(kubeconfigPath string) (*Client, error) {
 	return &Client{
 		client:    client,
 		clientset: clientset,
-		config:    config,
+		Config:    config,
 	}, nil
 }
 
@@ -193,7 +193,7 @@ func (c *Client) Exec(ctx context.Context, namespace, podName, container string,
 			TTY:       false,
 		}, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(c.config, "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(c.Config, "POST", req.URL())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create executor: %w", err)
 	}

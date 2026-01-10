@@ -206,6 +206,7 @@ func UnmarshalActionConfigValueSum(unmarshal func(interface{}) error, a *ActionC
 	var actionNode struct {
 		Type          ActionType `yaml:"type"`
 		ConfigMapName string     `yaml:"config_map"`
+		Namespace     string     `yaml:"namespace,omitempty"`
 		Key           string     `yaml:"key"`
 		Sum           int        `yaml:"sum"`
 		Members       []string   `yaml:"members"`
@@ -214,9 +215,13 @@ func UnmarshalActionConfigValueSum(unmarshal func(interface{}) error, a *ActionC
 	if err := unmarshal(&actionNode); err != nil {
 		return err
 	}
+	if actionNode.Namespace == "" {
+		actionNode.Namespace = "default"
+	}
 
 	a.Type = actionNode.Type
 	a.ConfigMapName = actionNode.ConfigMapName
+	a.Namespace = actionNode.Namespace
 	a.Key = actionNode.Key
 	a.Sum = actionNode.Sum
 	a.Members = actionNode.Members

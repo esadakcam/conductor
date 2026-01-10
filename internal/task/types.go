@@ -60,7 +60,7 @@ type TaskInterface interface {
 }
 
 type Condition interface {
-	Evaluate(ctx context.Context) (bool, error)
+	Evaluate(ctx context.Context, payload any) (bool, error)
 	GetType() ConditionType
 }
 
@@ -126,6 +126,7 @@ type ActionDelayData struct {
 type ActionConfigValueSumData struct {
 	Type          ActionType `yaml:"type"`
 	ConfigMapName string     `yaml:"configMap"`
+	Namespace     string     `yaml:"namespace,omitempty"`
 	Key           string     `yaml:"key"`
 	Sum           int        `yaml:"sum"`
 	Members       []string   `yaml:"members"` // todo make it a struct and pass auth info

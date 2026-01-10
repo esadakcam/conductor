@@ -1,12 +1,16 @@
-package distributed
+package centralized
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/task"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
@@ -114,16 +118,16 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 			name: "empty endpoint returns error",
 			condition: &ConditionEndpointSuccess{
 				ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
-					Endpoint: "", // Empty endpoint should trigger error
+					Endpoint: "",
 					Status:   200,
 				},
 			},
-			serverHandler:  nil, // Not used for this test
+			serverHandler:  nil,
 			expectedResult: false,
 			expectedError:  true,
 		},
 		{
-			name: "successful evaluation with empty response body",
+			name: "successful evaluation with empty response body check",
 			condition: &ConditionEndpointSuccess{
 				ConditionEndpointSuccessData: task.ConditionEndpointSuccessData{
 					Endpoint:     "",
@@ -141,7 +145,6 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up test server if handler is provided
 			if tt.serverHandler != nil {
 				server := httptest.NewServer(tt.serverHandler)
 				defer server.Close()
@@ -181,6 +184,13 @@ func TestConditionEndpointSuccess_Evaluate_InvalidEndpoint(t *testing.T) {
 	}
 	if result {
 		t.Errorf("expected false result for invalid endpoint, got true")
+	}
+}
+
+func TestConditionEndpointSuccess_GetType(t *testing.T) {
+	condition := &ConditionEndpointSuccess{}
+	if condition.GetType() != task.ConditionTypeEndpointSuccess {
+		t.Errorf("expected type %v, got %v", task.ConditionTypeEndpointSuccess, condition.GetType())
 	}
 }
 
@@ -513,7 +523,6 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up test server if handler is provided
 			if tt.serverHandler != nil {
 				server := httptest.NewServer(tt.serverHandler)
 				defer server.Close()
@@ -554,6 +563,13 @@ func TestConditionEndpointValue_Evaluate_InvalidEndpoint(t *testing.T) {
 	}
 	if result {
 		t.Errorf("expected false result for invalid endpoint, got true")
+	}
+}
+
+func TestConditionEndpointValue_GetType(t *testing.T) {
+	condition := &ConditionEndpointValue{}
+	if condition.GetType() != task.ConditionTypeEndpointValue {
+		t.Errorf("expected type %v, got %v", task.ConditionTypeEndpointValue, condition.GetType())
 	}
 }
 
@@ -1047,7 +1063,6 @@ cpu_usage 75.5
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up test server if handler is provided
 			if tt.serverHandler != nil {
 				server := httptest.NewServer(tt.serverHandler)
 				defer server.Close()
@@ -1091,6 +1106,13 @@ func TestConditionPrometheusMetric_Evaluate_InvalidEndpoint(t *testing.T) {
 	}
 	if result {
 		t.Errorf("expected false result for invalid endpoint, got true")
+	}
+}
+
+func TestConditionPrometheusMetric_GetType(t *testing.T) {
+	condition := &ConditionPrometheusMetric{}
+	if condition.GetType() != task.ConditionTypePrometheusMetric {
+		t.Errorf("expected type %v, got %v", task.ConditionTypePrometheusMetric, condition.GetType())
 	}
 }
 
@@ -1182,366 +1204,518 @@ labeled_metric{env="dev"} 50
 	}
 }
 
-func TestConditionPrometheusMetric_GetType(t *testing.T) {
-	condition := &ConditionPrometheusMetric{}
-	if condition.GetType() != task.ConditionTypePrometheusMetric {
-		t.Errorf("expected type %v, got %v", task.ConditionTypePrometheusMetric, condition.GetType())
-	}
-}
-
-func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
-	// Sample deployment responses
-	readyDeployment := `{
-		"metadata": {
-			"name": "test-deployment",
-			"namespace": "default",
-			"generation": 1
-		},
-		"spec": {
-			"replicas": 3
-		},
-		"status": {
-			"observedGeneration": 1,
-			"replicas": 3,
-			"updatedReplicas": 3,
-			"readyReplicas": 3,
-			"availableReplicas": 3
-		}
-	}`
-
-	rollingDeployment := `{
-		"metadata": {
-			"name": "test-deployment",
-			"namespace": "default",
-			"generation": 2
-		},
-		"spec": {
-			"replicas": 3
-		},
-		"status": {
-			"observedGeneration": 2,
-			"replicas": 4,
-			"updatedReplicas": 2,
-			"readyReplicas": 3,
-			"availableReplicas": 3
-		}
-	}`
-
-	pendingDeployment := `{
-		"metadata": {
-			"name": "test-deployment",
-			"namespace": "default",
-			"generation": 1
-		},
-		"spec": {
-			"replicas": 3
-		},
-		"status": {
-			"observedGeneration": 1,
-			"replicas": 3,
-			"updatedReplicas": 3,
-			"readyReplicas": 2,
-			"availableReplicas": 2
-		}
-	}`
-
-	staleGeneration := `{
-		"metadata": {
-			"name": "test-deployment",
-			"namespace": "default",
-			"generation": 3
-		},
-		"spec": {
-			"replicas": 3
-		},
-		"status": {
-			"observedGeneration": 2,
-			"replicas": 3,
-			"updatedReplicas": 3,
-			"readyReplicas": 3,
-			"availableReplicas": 3
-		}
-	}`
-
-	wrongReplicaCount := `{
-		"metadata": {
-			"name": "test-deployment",
-			"namespace": "default",
-			"generation": 1
-		},
-		"spec": {
-			"replicas": 5
-		},
-		"status": {
-			"observedGeneration": 1,
-			"replicas": 5,
-			"updatedReplicas": 5,
-			"readyReplicas": 5,
-			"availableReplicas": 5
-		}
-	}`
-
-	noStatusDeployment := `{
-		"metadata": {
-			"name": "test-deployment",
-			"namespace": "default",
-			"generation": 1
-		},
-		"spec": {
-			"replicas": 3
-		}
-	}`
-
-	tests := []struct {
-		name           string
-		condition      *ConditionK8sDeploymentReady
-		serverHandler  http.HandlerFunc
-		expectedResult bool
-		expectedError  bool
-	}{
-		{
-			name: "deployment is ready with expected replicas",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "",
-					Deployment: "test-deployment",
-					Namespace:  "default",
-					Replicas:   3,
-				},
-			},
-			serverHandler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(readyDeployment))
-			},
-			expectedResult: true,
-			expectedError:  false,
-		},
-		{
-			name: "deployment is rolling out",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "",
-					Deployment: "test-deployment",
-					Namespace:  "default",
-					Replicas:   3,
-				},
-			},
-			serverHandler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(rollingDeployment))
-			},
-			expectedResult: false,
-			expectedError:  false,
-		},
-		{
-			name: "deployment has pending pods",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "",
-					Deployment: "test-deployment",
-					Namespace:  "default",
-					Replicas:   3,
-				},
-			},
-			serverHandler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(pendingDeployment))
-			},
-			expectedResult: false,
-			expectedError:  false,
-		},
-		{
-			name: "deployment has stale observed generation",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "",
-					Deployment: "test-deployment",
-					Namespace:  "default",
-					Replicas:   3,
-				},
-			},
-			serverHandler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(staleGeneration))
-			},
-			expectedResult: false,
-			expectedError:  false,
-		},
-		{
-			name: "deployment has wrong replica count",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "",
-					Deployment: "test-deployment",
-					Namespace:  "default",
-					Replicas:   3,
-				},
-			},
-			serverHandler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(wrongReplicaCount))
-			},
-			expectedResult: false,
-			expectedError:  false,
-		},
-		{
-			name: "deployment has no status yet",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "",
-					Deployment: "test-deployment",
-					Namespace:  "default",
-					Replicas:   3,
-				},
-			},
-			serverHandler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(noStatusDeployment))
-			},
-			expectedResult: false,
-			expectedError:  false,
-		},
-		{
-			name: "empty member returns error",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "",
-					Deployment: "test-deployment",
-					Namespace:  "default",
-					Replicas:   3,
-				},
-			},
-			serverHandler:  nil,
-			expectedResult: false,
-			expectedError:  true,
-		},
-		{
-			name: "empty deployment returns error",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "will-be-replaced",
-					Deployment: "",
-					Namespace:  "default",
-					Replicas:   3,
-				},
-			},
-			serverHandler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(readyDeployment))
-			},
-			expectedResult: false,
-			expectedError:  true,
-		},
-		{
-			name: "server returns error status",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "",
-					Deployment: "test-deployment",
-					Namespace:  "default",
-					Replicas:   3,
-				},
-			},
-			serverHandler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(`{"error": "deployment not found"}`))
-			},
-			expectedResult: false,
-			expectedError:  true,
-		},
-		{
-			name: "server returns invalid JSON",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "",
-					Deployment: "test-deployment",
-					Namespace:  "default",
-					Replicas:   3,
-				},
-			},
-			serverHandler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("not valid json"))
-			},
-			expectedResult: false,
-			expectedError:  true,
-		},
-		{
-			name: "default namespace is used when not specified",
-			condition: &ConditionK8sDeploymentReady{
-				ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-					Member:     "",
-					Deployment: "test-deployment",
-					Namespace:  "",
-					Replicas:   3,
-				},
-			},
-			serverHandler: func(w http.ResponseWriter, r *http.Request) {
-				// Verify the URL contains default namespace
-				if r.URL.Path != "/api/v1/deployments/default/test-deployment" {
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(readyDeployment))
-			},
-			expectedResult: true,
-			expectedError:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Set up test server if handler is provided
-			if tt.serverHandler != nil {
-				server := httptest.NewServer(tt.serverHandler)
-				defer server.Close()
-				if tt.condition.Member == "" || tt.condition.Member == "will-be-replaced" {
-					tt.condition.Member = server.URL
-				}
-			}
-
-			result, err := tt.condition.Evaluate(context.Background(), nil)
-
-			if tt.expectedError {
-				if err == nil {
-					t.Errorf("expected error but got none")
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-				if result != tt.expectedResult {
-					t.Errorf("expected result %v, got %v", tt.expectedResult, result)
-				}
-			}
-		})
-	}
-}
-
-func TestConditionK8sDeploymentReady_Evaluate_InvalidEndpoint(t *testing.T) {
-	condition := &ConditionK8sDeploymentReady{
-		ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-			Member:     "http://invalid-endpoint-that-does-not-exist-12345.local",
-			Deployment: "test-deployment",
-			Namespace:  "default",
-			Replicas:   3,
-		},
-	}
+func TestConditionAlwaysTrue_Evaluate(t *testing.T) {
+	condition := &ConditionAlwaysTrue{}
 
 	result, err := condition.Evaluate(context.Background(), nil)
 
-	if err == nil {
-		t.Errorf("expected error for invalid endpoint, got none")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
-	if result {
-		t.Errorf("expected false result for invalid endpoint, got true")
+	if !result {
+		t.Errorf("expected true result, got false")
 	}
 }
 
+func TestConditionAlwaysTrue_Evaluate_WithPayload(t *testing.T) {
+	condition := &ConditionAlwaysTrue{}
+
+	// Should work with any payload
+	result, err := condition.Evaluate(context.Background(), map[string]any{"key": "value"})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !result {
+		t.Errorf("expected true result, got false")
+	}
+}
+
+func TestConditionAlwaysTrue_GetType(t *testing.T) {
+	condition := &ConditionAlwaysTrue{}
+	if condition.GetType() != task.ConditionTypeAlwaysTrue {
+		t.Errorf("expected type %v, got %v", task.ConditionTypeAlwaysTrue, condition.GetType())
+	}
+}
+
+// K8s deployment ready condition tests using Kind cluster
 func TestConditionK8sDeploymentReady_GetType(t *testing.T) {
 	condition := &ConditionK8sDeploymentReady{}
 	if condition.GetType() != task.ConditionTypeK8sDeploymentReady {
 		t.Errorf("expected type %v, got %v", task.ConditionTypeK8sDeploymentReady, condition.GetType())
 	}
+}
+
+func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
+	client := setupTestCluster(t)
+	ctx := context.Background()
+	ns := setupTestNamespace(t, client)
+	defer cleanupTestNamespace(t, client, ns)
+
+	t.Run("deployment is ready with expected replicas", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-ready-deploy-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(2),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "ready-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "ready-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Wait for deployment to be ready
+		err = waitForDeploymentReady(t, client, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("Deployment did not become ready: %v", err)
+		}
+
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  ns,
+				Replicas:   2,
+			},
+		}
+
+		payload := createK8sClientsPayload(map[string]*k8s.Client{
+			"member1": client,
+		})
+
+		result, err := condition.Evaluate(ctx, payload)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if !result {
+			t.Errorf("expected deployment to be ready, got false")
+		}
+	})
+
+	t.Run("deployment is ready but with different replica count", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-diff-replicas-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "diff-replicas-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "diff-replicas-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Wait for deployment to be ready
+		err = waitForDeploymentReady(t, client, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("Deployment did not become ready: %v", err)
+		}
+
+		// Expect 3 replicas but deployment has 1
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  ns,
+				Replicas:   3,
+			},
+		}
+
+		payload := createK8sClientsPayload(map[string]*k8s.Client{
+			"member1": client,
+		})
+
+		result, err := condition.Evaluate(ctx, payload)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if result {
+			t.Errorf("expected deployment to NOT be ready (wrong replica count), got true")
+		}
+	})
+
+	t.Run("deployment is not ready (pending pods)", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-pending-deploy-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "pending-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "pending-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "invalid-image-that-does-not-exist:v999",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Give Kubernetes a moment to start the deployment
+		time.Sleep(2 * time.Second)
+
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  ns,
+				Replicas:   1,
+			},
+		}
+
+		payload := createK8sClientsPayload(map[string]*k8s.Client{
+			"member1": client,
+		})
+
+		result, err := condition.Evaluate(ctx, payload)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if result {
+			t.Errorf("expected deployment to NOT be ready (pending pods), got true")
+		}
+	})
+
+	t.Run("deployment with default namespace", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-default-ns-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": "default",
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "default-ns-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "default-ns-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", "default", deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", "default", deployName)
+
+		// Wait for deployment to be ready
+		err = waitForDeploymentReady(t, client, "default", deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("Deployment did not become ready: %v", err)
+		}
+
+		// Test with empty namespace (should default to "default")
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  "", // Should default to "default"
+				Replicas:   1,
+			},
+		}
+
+		payload := createK8sClientsPayload(map[string]*k8s.Client{
+			"member1": client,
+		})
+
+		result, err := condition.Evaluate(ctx, payload)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if !result {
+			t.Errorf("expected deployment to be ready, got false")
+		}
+	})
+
+	t.Run("missing member returns error", func(t *testing.T) {
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "",
+				Deployment: "test-deployment",
+				Namespace:  ns,
+				Replicas:   1,
+			},
+		}
+
+		payload := createK8sClientsPayload(map[string]*k8s.Client{
+			"member1": client,
+		})
+
+		_, err := condition.Evaluate(ctx, payload)
+		if err == nil {
+			t.Error("expected error for missing member")
+		}
+	})
+
+	t.Run("missing deployment name returns error", func(t *testing.T) {
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "member1",
+				Deployment: "",
+				Namespace:  ns,
+				Replicas:   1,
+			},
+		}
+
+		payload := createK8sClientsPayload(map[string]*k8s.Client{
+			"member1": client,
+		})
+
+		_, err := condition.Evaluate(ctx, payload)
+		if err == nil {
+			t.Error("expected error for missing deployment name")
+		}
+	})
+
+	t.Run("missing k8s client for member returns error", func(t *testing.T) {
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "nonexistent",
+				Deployment: "test-deployment",
+				Namespace:  ns,
+				Replicas:   1,
+			},
+		}
+
+		payload := createK8sClientsPayload(map[string]*k8s.Client{
+			"member1": client,
+		})
+
+		_, err := condition.Evaluate(ctx, payload)
+		if err == nil {
+			t.Error("expected error for missing k8s client")
+		}
+	})
+
+	t.Run("non-existent deployment returns error", func(t *testing.T) {
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "member1",
+				Deployment: "non-existent-deployment",
+				Namespace:  ns,
+				Replicas:   1,
+			},
+		}
+
+		payload := createK8sClientsPayload(map[string]*k8s.Client{
+			"member1": client,
+		})
+
+		_, err := condition.Evaluate(ctx, payload)
+		if err == nil {
+			t.Error("expected error for non-existent deployment")
+		}
+	})
+
+	t.Run("invalid payload format returns error", func(t *testing.T) {
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "member1",
+				Deployment: "test-deployment",
+				Namespace:  ns,
+				Replicas:   1,
+			},
+		}
+
+		_, err := condition.Evaluate(ctx, "invalid payload")
+		if err == nil {
+			t.Error("expected error for invalid payload format")
+		}
+	})
+
+	t.Run("missing k8sClients in payload returns error", func(t *testing.T) {
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "member1",
+				Deployment: "test-deployment",
+				Namespace:  ns,
+				Replicas:   1,
+			},
+		}
+
+		payload := map[string]any{
+			"other": "data",
+		}
+
+		_, err := condition.Evaluate(ctx, payload)
+		if err == nil {
+			t.Error("expected error for missing k8sClients in payload")
+		}
+	})
+
+	t.Run("deployment with zero replicas expected", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-zero-replicas-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(0),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "zero-replicas-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "zero-replicas-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Wait a moment for the deployment to be processed
+		time.Sleep(2 * time.Second)
+
+		condition := &ConditionK8sDeploymentReady{
+			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  ns,
+				Replicas:   0,
+			},
+		}
+
+		payload := createK8sClientsPayload(map[string]*k8s.Client{
+			"member1": client,
+		})
+
+		result, err := condition.Evaluate(ctx, payload)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if !result {
+			t.Errorf("expected deployment with 0 replicas to be ready, got false")
+		}
+	})
 }
