@@ -529,15 +529,3 @@ func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, payload any) err
 func (a *ActionK8sScaleDeployment) GetType() task.ActionType {
 	return task.ActionTypeK8sScaleDeployment
 }
-
-func getK8sClients(payload any) (map[string]*k8s.Client, error) {
-	data, ok := payload.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("invalid payload format")
-	}
-	k8sClients, ok := data["k8sClients"].(map[string]*k8s.Client)
-	if !ok {
-		return nil, fmt.Errorf("invalid or missing k8sClients in payload")
-	}
-	return k8sClients, nil
-}

@@ -39,9 +39,7 @@ func (o *Outbox) ExecuteTask(t task.TaskInterface) error {
 	o.executingTasks[t.GetName()] = true
 	o.mu.Unlock()
 
-	payload := map[string]any{
-		"k8sClients": o.k8sClients,
-	}
+	payload := o.GetPayload()
 	for _, action := range t.GetActions() {
 		if err := action.Execute(o.ctx, payload); err != nil {
 			o.mu.Lock()
@@ -54,4 +52,11 @@ func (o *Outbox) ExecuteTask(t task.TaskInterface) error {
 	o.executingTasks[t.GetName()] = false
 	o.mu.Unlock()
 	return nil
+}
+
+// GetPayload returns the payload containing k8s clients for condition evaluation.
+func (o *Outbox) GetPayload() any {
+	return map[string]any{
+		"k8sClients": o.k8sClients,
+	}
 }

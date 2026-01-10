@@ -181,3 +181,9 @@ func (o *Outbox) fulfillTaskFromOutbox(t task.TaskInterface) error {
 	o.mu.Unlock()
 	return nil
 }
+
+// GetPayload returns nil for distributed mode as conditions use HTTP-based
+// communication instead of direct k8s clients.
+func (o *Outbox) GetPayload() any {
+	return nil
+}
