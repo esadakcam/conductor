@@ -45,12 +45,12 @@ tasks:
   #     member: "http://192.168.1.114:8080"
   #     deployment: "gnb"
   #     namespace: "open5gs"
-  #     command: ["nr-cli", "UERANSIM-gnb-999-70-16", "-e", "'ue-release 1'"]
+  #     command: ["nr-cli", "UERANSIM-gnb-999-70-16", "-e", "ue-release 1"]
   #   - type: "k8s_exec_deployment"
   #     member: "http://192.168.1.114:8080"
   #     deployment: "ue"
   #     namespace: "open5gs"
-  #     command: ["nr-cli", "imsi-999700000000001", "--exec", "'ps-release-all'"]
+  #     command: ["nr-cli", "imsi-999700000000001", "--exec", "ps-release-all"]
   #   - type: "k8s_restart_deployment"
   #     member: "http://192.168.1.114:8080"
   #     deployment: "gnb"
@@ -148,12 +148,12 @@ tasks:
   #     member: "http://192.168.1.114:8080"
   #     deployment: "gnb"
   #     namespace: "open5gs"
-  #     command: ["nr-cli", "UERANSIM-gnb-999-70-16", "-e", "'ue-release 1'"]
+  #     command: ["nr-cli", "UERANSIM-gnb-999-70-16", "-e", "ue-release 1"]
   #   - type: "k8s_exec_deployment"
   #     member: "http://192.168.1.114:8080"
   #     deployment: "ue"
   #     namespace: "open5gs"
-  #     command: ["nr-cli", "imsi-999700000000001", "--exec", "'ps-release-all'"]
+  #     command: ["nr-cli", "imsi-999700000000001", "--exec", "ps-release-all"]
   #   - type: "k8s_restart_deployment"
   #     member: "http://192.168.1.114:8080"
   #     deployment: "gnb"

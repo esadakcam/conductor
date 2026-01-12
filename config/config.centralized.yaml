@@ -2,34 +2,194 @@ kubeconfig_locations:
   - /Users/esad/Projects/conductor/kubeconfigs/kubeconfig.yml
 
 tasks:
-  - name: nginx-data value sum accross members is 30
+  - name: "Scale down cluster 1 and delegate to cluster 2 at night"
     when:
-      - type: "always_true"
+    - type: "endpoint_value"
+      endpoint: "http://192.168.1.115:8000"
+      value: 1
+      operator: eq
+    - type: "prometheus_metric" # cluster 1 usage
+      endpoint: "http://192.168.1.111:30092/metrics"
+      metric_name: "ues_active"
+      operator: "lt"
+      value: 10
+    - type: "prometheus_metric" # cluster 2 capacity
+      endpoint: "http://192.168.1.112:30092/metrics"
+      metric_name: "ues_active"
+      operator: "lt"
+      value: 150
     then:
-      - type: "config_value_sum"
-        config_map: "nginx-data"
-        key: "value"
-        sum: 920
-        members:
-          - "https://127.0.0.1:51044"
-          # - "http://192.168.1.111:8080"
-          # - "http://192.168.1.112:8080"
-          # - "http://192.168.1.113:8080"
+    - type: "k8s_update_configmap"
+      config_map: "gnb-config"
+      member: "https://192.168.1.114:6443"
+      namespace: "open5gs"
+      key: "tac"
+      value: "0002"
+    - type: "k8s_update_configmap"
+      config_map: "gnb-config"
+      member: "https://192.168.1.114:6443"
+      namespace: "open5gs"
+      key: "amfIp"
+      value: "192.168.1.112"
+    - type: "k8s_exec_deployment"
+      member: "https://192.168.1.114:6443"
+      deployment: "gnb"
+      namespace: "open5gs"
+      command: ["nr-cli", "UERANSIM-gnb-999-70-16", "-e", "ue-release 1"]
+    - type: "k8s_exec_deployment"
+      member: "https://192.168.1.114:6443"
+      deployment: "ue"
+      namespace: "open5gs"
+      command: ["nr-cli", "imsi-999700000000001", "--exec", "ps-release-all"]
+    - type: "k8s_restart_deployment"
+      member: "https://192.168.1.114:6443"
+      deployment: "gnb"
+      namespace: "open5gs"
+    - type: "k8s_wait_deployment_rollout"
+      member: "https://192.168.1.114:6443"
+      deployment: "gnb"
+      namespace: "open5gs"
+    - type: "k8s_restart_deployment"
+      member: "https://192.168.1.114:6443"
+      deployment: "ue"
+      namespace: "open5gs"
+    - type: "k8s_wait_deployment_rollout"
+      member: "https://192.168.1.114:6443"
+      deployment: "ue"
+      namespace: "open5gs"
+    - type: "k8s_scale_deployment"
+      member: "https://192.168.1.111:6443"
+      deployment: "amf"
+      namespace: "open5gs"
+      replicas: 0
+    - type: "k8s_scale_deployment"
+      member: "https://192.168.1.111:6443"
+      deployment: "smf"
+      namespace: "open5gs"
+      replicas: 0
+    - type: "k8s_scale_deployment"
+      member: "https://192.168.1.111:6443"
+      deployment: "upf"
+      namespace: "open5gs"
+      replicas: 0
 
-      - type: delay
-        time: 3s
-      - type: "config_value_sum"
-        config_map: "nginx-data"
-        key: "value"
-        sum: 50
-        members:
-          - "https://127.0.0.1:51044"
-          # - "http://192.168.1.111:8080"
-          # - "http://192.168.1.112:8080"
-          # - "http://192.168.1.113:8080"
-      - type: "k8s_restart_deployment"
-        member: "https://127.0.0.1:51044" 
-        deployment: "nginx"
-      - type: "k8s_wait_deployment_rollout"
-        member: "https://127.0.0.1:51044" 
-        deployment: "nginx"
+  - name: "Scale up cluster 1 and remove tac 1 from cluster 2"
+    when:
+    - type: "endpoint_value"
+      endpoint: "http://192.168.1.115:8000"
+      value: 2
+      operator: eq
+    - type: "k8s_deployment_ready"
+      member: "https://192.168.1.111:6443"
+      deployment: "amf"
+      namespace: "open5gs"
+      replicas: 0
+    - type: "k8s_deployment_ready"
+      member: "https://192.168.1.111:6443"
+      deployment: "upf"
+      namespace: "open5gs"
+      replicas: 0
+    - type: "k8s_deployment_ready"
+      member: "https://192.168.1.111:6443"
+      deployment: "smf"
+      namespace: "open5gs"
+      replicas: 0
+    then:
+    - type: "k8s_scale_deployment"
+      member: "https://192.168.1.111:6443"
+      deployment: "amf"
+      namespace: "open5gs"
+      replicas: 1
+    - type: "k8s_scale_deployment"
+      member: "https://192.168.1.111:6443"
+      deployment: "smf"
+      namespace: "open5gs"
+      replicas: 1
+    - type: "k8s_scale_deployment"
+      member: "https://192.168.1.111:6443"
+      deployment: "upf"
+      namespace: "open5gs"
+      replicas: 1
+    - type: "k8s_wait_deployment_rollout"
+      member: "https://192.168.1.111:6443"
+      deployment: "amf"
+      namespace: "open5gs"
+    - type: "k8s_wait_deployment_rollout"
+      member: "https://192.168.1.111:6443"
+      deployment: "smf"
+      namespace: "open5gs"
+    - type: "k8s_wait_deployment_rollout"
+      member: "https://192.168.1.111:6443"
+      deployment: "upf"
+      namespace: "open5gs"
+    - type: "k8s_update_configmap"
+      config_map: "gnb-config"
+      member: "https://192.168.1.114:6443"
+      namespace: "open5gs"
+      key: "tac"
+      value: "0001"
+    - type: "k8s_update_configmap"
+      config_map: "gnb-config"
+      member: "https://192.168.1.114:6443"
+      namespace: "open5gs"
+      key: "amfIp"
+      value: "192.168.1.111"
+    - type: "k8s_exec_deployment"
+      member: "https://192.168.1.114:6443"
+      deployment: "gnb"
+      namespace: "open5gs"
+      command: ["nr-cli", "UERANSIM-gnb-999-70-16", "-e", "ue-release 1"]
+    - type: "k8s_exec_deployment"
+      member: "https://192.168.1.114:6443"
+      deployment: "ue"
+      namespace: "open5gs"
+      command: ["nr-cli", "imsi-999700000000001", "--exec", "ps-release-all"]
+    - type: "k8s_restart_deployment"
+      member: "https://192.168.1.114:6443"
+      deployment: "gnb"
+      namespace: "open5gs"
+    - type: "k8s_wait_deployment_rollout"
+      member: "https://192.168.1.114:6443"
+      deployment: "gnb"
+      namespace: "open5gs"
+    - type: "k8s_restart_deployment"
+      member: "https://192.168.1.114:6443"
+      deployment: "ue"
+      namespace: "open5gs"
+    - type: "k8s_wait_deployment_rollout"
+      member: "https://192.168.1.114:6443"
+      deployment: "ue"
+      namespace: "open5gs"
+
+
+#   - name: nginx-data value sum accross members is 30
+#     when:
+#       - type: "always_true"
+#     then:
+#       - type: "config_value_sum"
+#         config_map: "nginx-data"
+#         key: "value"
+#         sum: 920
+#         members:
+#           - "https://127.0.0.1:51044"
+#           # - "http://192.168.1.111:8080"
+#           # - "http://192.168.1.112:8080"
+#           # - "http://192.168.1.113:8080"
+
+#       - type: delay
+#         time: 3s
+#       - type: "config_value_sum"
+#         config_map: "nginx-data"
+#         key: "value"
+#         sum: 50
+#         members:
+#           - "https://127.0.0.1:51044"
+#           # - "http://192.168.1.111:8080"
+#           # - "http://192.168.1.112:8080"
+#           # - "http://192.168.1.113:8080"
+#       - type: "k8s_restart_deployment"
+#         member: "https://127.0.0.1:51044" 
+#         deployment: "nginx"
+#       - type: "k8s_wait_deployment_rollout"
+#         member: "https://127.0.0.1:51044" 
+#         deployment: "nginx"
