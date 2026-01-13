@@ -15,6 +15,12 @@ import (
 
 const outboxKey = "/conductor/outbox"
 
+const (
+	maxRetries     = 3
+	initialBackoff = 1 * time.Second
+	maxBackoff     = 30 * time.Second
+)
+
 type OutboxItem struct {
 	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
@@ -99,6 +105,41 @@ func (o *Outbox) ExecuteTask(toExecute task.TaskInterface) error {
 	return nil
 }
 
+// GetPayload returns nil for distributed mode as conditions use HTTP-based
+// communication instead of direct k8s clients.
+func (o *Outbox) GetPayload() any {
+	return nil
+}
+
+func executeWithRetry(ctx context.Context, operation string, fn func() error) error {
+	var lastErr error
+	backoff := initialBackoff
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			logger.Infof("Retrying %s (attempt %d/%d) after %v", operation, attempt, maxRetries, backoff)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
+
+		lastErr = fn()
+		if lastErr == nil {
+			return nil
+		}
+		logger.Errorf("failed %s (attempt %d/%d): %v", operation, attempt+1, maxRetries+1, lastErr)
+	}
+
+	logger.Errorf("%s failed after %d attempts: %v", operation, maxRetries+1, lastErr)
+	return lastErr
+}
+
 func (o *Outbox) init(tasks []task.TaskInterface) {
 	logger.Infof("Initializing outbox with %d tasks", len(tasks))
 	for _, t := range tasks {
@@ -141,9 +182,13 @@ func (o *Outbox) fulfillTaskFromOutbox(t task.TaskInterface) error {
 			"idempotencyId": item.ID.String(),
 			"epoch":         o.epoch,
 		}
-		err := t.GetActions()[i].Execute(o.ctx, payload)
+
+		operation := fmt.Sprintf("task %s step %d", t.GetName(), i)
+		// Since members are idempotent, we can safely retry the operation.
+		err = executeWithRetry(o.ctx, operation, func() error {
+			return t.GetActions()[i].Execute(o.ctx, payload)
+		})
 		if err != nil {
-			logger.Errorf("failed to execute task step %d: %v", i, err)
 			return err
 		}
 		newItem := OutboxItem{
@@ -179,11 +224,5 @@ func (o *Outbox) fulfillTaskFromOutbox(t task.TaskInterface) error {
 	o.mu.Lock()
 	o.executingTasks[t.GetName()] = false
 	o.mu.Unlock()
-	return nil
-}
-
-// GetPayload returns nil for distributed mode as conditions use HTTP-based
-// communication instead of direct k8s clients.
-func (o *Outbox) GetPayload() any {
 	return nil
 }
