@@ -39,13 +39,18 @@ clean:
 ## test: Run tests
 test:
 	@echo "Running tests..."
-	@go test -v -race -coverprofile=coverage.out ./...
-	@go tool cover -func=coverage.out
+	@go test -v -race ./...
+
+## test-cover: Run tests with coverage
+test-cover:
+	@echo "Running tests with coverage..."
+	@go test -v -race -coverprofile=coverage.out -coverpkg=./... ./internal/k8s/... ./internal/server/... ./internal/utils/... 2>/dev/null || true
+	@go tool cover -func=coverage.out 2>/dev/null || echo "Coverage report not available"
 
 ## test-coverage: Run tests with HTML coverage report
-test-coverage: test
+test-coverage: test-cover
 	@echo "Generating coverage report..."
-	@go tool cover -html=coverage.out -o coverage.html
+	@go tool cover -html=coverage.out -o coverage.html 2>/dev/null || echo "Could not generate HTML coverage"
 	@echo "Coverage report generated: coverage.html"
 
 ## fmt: Format code

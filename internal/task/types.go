@@ -1,10 +1,8 @@
 package task
 
-import (
-	"context"
-	"time"
-)
+import "time"
 
+// ConditionType identifies the type of condition
 type ConditionType string
 
 const (
@@ -15,6 +13,46 @@ const (
 	ConditionTypeK8sDeploymentReady ConditionType = "k8s_deployment_ready"
 )
 
+// ConditionEndpointSuccess checks if an HTTP endpoint returns expected status/response
+type ConditionEndpointSuccess struct {
+	Type         ConditionType `yaml:"type"`
+	Endpoint     string        `yaml:"endpoint"`
+	ResponseBody string        `yaml:"response,omitempty"`
+	Status       int           `yaml:"status,omitempty"`
+}
+
+// ConditionAlwaysTrue always evaluates to true (useful for testing/always-run tasks)
+type ConditionAlwaysTrue struct {
+	Type ConditionType `yaml:"type"`
+}
+
+// ConditionEndpointValue compares an integer value from an endpoint
+type ConditionEndpointValue struct {
+	Type     ConditionType `yaml:"type"`
+	Endpoint string        `yaml:"endpoint"`
+	Value    int           `yaml:"value"`
+	Operator string        `yaml:"operator"` // eq, ne, lt, gt, le, ge
+}
+
+// ConditionPrometheusMetric compares a Prometheus metric value
+type ConditionPrometheusMetric struct {
+	Type       ConditionType `yaml:"type"`
+	Endpoint   string        `yaml:"endpoint"`
+	MetricName string        `yaml:"metric_name"`
+	Value      float64       `yaml:"value"`
+	Operator   string        `yaml:"operator"` // eq, ne, lt, gt, le, ge
+}
+
+// ConditionK8sDeploymentReady checks if a K8s deployment has expected replicas ready
+type ConditionK8sDeploymentReady struct {
+	Type       ConditionType `yaml:"type"`
+	Member     string        `yaml:"member"`
+	Deployment string        `yaml:"deployment"`
+	Namespace  string        `yaml:"namespace,omitempty"`
+	Replicas   int32         `yaml:"replicas"`
+}
+
+// ActionType identifies the type of action
 type ActionType string
 
 const (
@@ -29,83 +67,8 @@ const (
 	ActionTypeK8sScaleDeployment       ActionType = "k8s_scale_deployment"
 )
 
-type Config struct {
-	Tasks []Task `yaml:"tasks"`
-}
-
-// Task is the concrete task struct used by both centralized and distributed modes
-type Task struct {
-	Name string      `yaml:"name"`
-	When []Condition `yaml:"when"`
-	Then []Action    `yaml:"then"`
-}
-
-func (t *Task) GetName() string {
-	return t.Name
-}
-
-func (t *Task) GetConditions() []Condition {
-	return t.When
-}
-
-func (t *Task) GetActions() []Action {
-	return t.Then
-}
-
-// TaskInterface is the interface for tasks used by the outbox
-type TaskInterface interface {
-	GetName() string
-	GetConditions() []Condition
-	GetActions() []Action
-}
-
-type Condition interface {
-	Evaluate(ctx context.Context, payload any) (bool, error)
-	GetType() ConditionType
-}
-
-type Action interface {
-	Execute(ctx context.Context, payload any) error
-	GetType() ActionType
-}
-
-// Base condition structs
-type ConditionEndpointSuccessData struct {
-	Type         ConditionType `yaml:"type"`
-	Endpoint     string        `yaml:"endpoint"`
-	ResponseBody string        `yaml:"response,omitempty"`
-	Status       int           `yaml:"status,omitempty"`
-}
-
-type ConditionAlwaysTrueData struct {
-	Type ConditionType `yaml:"type"`
-}
-
-type ConditionEndpointValueData struct {
-	Type     ConditionType `yaml:"type"`
-	Endpoint string        `yaml:"endpoint"`
-	Value    int           `yaml:"value"`
-	Operator string        `yaml:"operator"` // eq, ne, lt, gt, le, ge
-}
-
-type ConditionPrometheusMetricData struct {
-	Type       ConditionType `yaml:"type"`
-	Endpoint   string        `yaml:"endpoint"`
-	MetricName string        `yaml:"metric_name"`
-	Value      float64       `yaml:"value"`
-	Operator   string        `yaml:"operator"` // eq, ne, lt, gt, le, ge
-}
-
-type ConditionK8sDeploymentReadyData struct {
-	Type       ConditionType `yaml:"type"`
-	Member     string        `yaml:"member"`
-	Deployment string        `yaml:"deployment"`
-	Namespace  string        `yaml:"namespace,omitempty"`
-	Replicas   int32         `yaml:"replicas"`
-}
-
-// Base action structs
-type ActionEndpointData struct {
+// ActionEndpoint makes an HTTP request to an endpoint
+type ActionEndpoint struct {
 	Type     ActionType        `yaml:"type"`
 	Endpoint string            `yaml:"endpoint"`
 	Method   string            `yaml:"method"` // GET, POST, PUT, DELETE
@@ -113,26 +76,30 @@ type ActionEndpointData struct {
 	Body     string            `yaml:"body,omitempty"`
 }
 
-type ActionEchoData struct {
+// ActionEcho logs a message
+type ActionEcho struct {
 	Type    ActionType `yaml:"type"`
 	Message string     `yaml:"message"`
 }
 
-type ActionDelayData struct {
+// ActionDelay pauses execution for a duration
+type ActionDelay struct {
 	Type ActionType    `yaml:"type"`
 	Time time.Duration `yaml:"time"`
 }
 
-type ActionConfigValueSumData struct {
+// ActionConfigValueSum distributes a sum across multiple cluster configmaps
+type ActionConfigValueSum struct {
 	Type          ActionType `yaml:"type"`
-	ConfigMapName string     `yaml:"configMap"`
+	ConfigMapName string     `yaml:"config_map"`
 	Namespace     string     `yaml:"namespace,omitempty"`
 	Key           string     `yaml:"key"`
 	Sum           int        `yaml:"sum"`
-	Members       []string   `yaml:"members"` // todo make it a struct and pass auth info
+	Members       []string   `yaml:"members"`
 }
 
-type ActionK8sExecDeploymentData struct {
+// ActionK8sExecDeployment executes a command on deployment pods
+type ActionK8sExecDeployment struct {
 	Type       ActionType `yaml:"type"`
 	Member     string     `yaml:"member"`
 	Deployment string     `yaml:"deployment"`
@@ -141,14 +108,16 @@ type ActionK8sExecDeploymentData struct {
 	Command    []string   `yaml:"command"`
 }
 
-type ActionK8sRestartDeploymentData struct {
+// ActionK8sRestartDeployment triggers a deployment restart
+type ActionK8sRestartDeployment struct {
 	Type       ActionType `yaml:"type"`
 	Member     string     `yaml:"member"`
 	Deployment string     `yaml:"deployment"`
 	Namespace  string     `yaml:"namespace,omitempty"`
 }
 
-type ActionK8sWaitDeploymentRolloutData struct {
+// ActionK8sWaitDeploymentRollout waits for a deployment rollout to complete
+type ActionK8sWaitDeploymentRollout struct {
 	Type       ActionType    `yaml:"type"`
 	Member     string        `yaml:"member"`
 	Deployment string        `yaml:"deployment"`
@@ -156,7 +125,8 @@ type ActionK8sWaitDeploymentRolloutData struct {
 	Timeout    time.Duration `yaml:"timeout,omitempty"` // Default: 5 minutes
 }
 
-type ActionK8sUpdateConfigMapData struct {
+// ActionK8sUpdateConfigMap updates a configmap key
+type ActionK8sUpdateConfigMap struct {
 	Type      ActionType `yaml:"type"`
 	Member    string     `yaml:"member"`
 	ConfigMap string     `yaml:"config_map"`
@@ -165,26 +135,11 @@ type ActionK8sUpdateConfigMapData struct {
 	Value     string     `yaml:"value"`
 }
 
-type ActionK8sScaleDeploymentData struct {
+// ActionK8sScaleDeployment scales a deployment to specified replicas
+type ActionK8sScaleDeployment struct {
 	Type       ActionType `yaml:"type"`
 	Member     string     `yaml:"member"`
 	Deployment string     `yaml:"deployment"`
 	Namespace  string     `yaml:"namespace,omitempty"`
 	Replicas   int32      `yaml:"replicas"`
 }
-
-// Backward compatibility aliases
-type ConditionEndpointSuccess = ConditionEndpointSuccessData
-type ConditionAlwaysTrue = ConditionAlwaysTrueData
-type ConditionEndpointValue = ConditionEndpointValueData
-type ConditionPrometheusMetric = ConditionPrometheusMetricData
-type ConditionK8sDeploymentReady = ConditionK8sDeploymentReadyData
-type ActionEndpoint = ActionEndpointData
-type ActionEcho = ActionEchoData
-type ActionDelay = ActionDelayData
-type ActionConfigValueSum = ActionConfigValueSumData
-type ActionK8sExecDeployment = ActionK8sExecDeploymentData
-type ActionK8sRestartDeployment = ActionK8sRestartDeploymentData
-type ActionK8sWaitDeploymentRollout = ActionK8sWaitDeploymentRolloutData
-type ActionK8sUpdateConfigMap = ActionK8sUpdateConfigMapData
-type ActionK8sScaleDeployment = ActionK8sScaleDeploymentData

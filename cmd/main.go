@@ -7,12 +7,10 @@ import (
 	"syscall"
 
 	"github.com/esadakcam/conductor/internal/cluster"
-	centralizedCluster "github.com/esadakcam/conductor/internal/cluster/centralized"
-	distributedCluster "github.com/esadakcam/conductor/internal/cluster/distributed"
+	"github.com/esadakcam/conductor/internal/config"
 	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/logger"
 	"github.com/esadakcam/conductor/internal/server"
-	"github.com/esadakcam/conductor/internal/utils"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -29,31 +27,36 @@ func main() {
 		cancel()
 	}()
 
+	if len(os.Args) < 2 {
+		logger.Fatal("Usage: conductor <mode> <config-path>")
+	}
+
 	mode := os.Args[1]
 
 	switch mode {
 	case "distributed":
-		initDistributedMode(ctx, cancel)
+		runDistributedMode(ctx, cancel)
 	case "centralized":
-		initCentralizedMode(ctx, cancel)
+		runCentralizedMode(ctx)
 	default:
 		logger.Fatalf("Unknown mode: %s", mode)
 	}
-
 }
 
-func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
-	configPath := os.Args[2]
-	if configPath == "" {
+func runCentralizedMode(ctx context.Context) {
+	if len(os.Args) < 3 {
 		logger.Fatal("Config path is required")
 	}
-	config, err := utils.LoadCentralizedConfig(configPath)
+	configPath := os.Args[2]
+
+	cfg, err := config.LoadCentralized(configPath)
 	if err != nil {
 		logger.Fatalf("Failed to load config: %v", err)
 	}
 
+	// Initialize K8s clients for all kubeconfig locations
 	k8sClients := make(map[string]*k8s.Client)
-	for _, kubeconfigLocation := range config.KubeconfigLocations {
+	for _, kubeconfigLocation := range cfg.KubeconfigLocations {
 		client, err := k8s.NewClient(kubeconfigLocation)
 		if err != nil {
 			logger.Fatalf("Failed to initialize Kubernetes client: %v", err)
@@ -62,35 +65,28 @@ func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
 		k8sClients[clientHost] = client
 	}
 
-	tasks := config.Tasks
-
-	outbox := centralizedCluster.NewOutbox(ctx, k8sClients)
-	cluster.Conduct(ctx, tasks, outbox)
+	outbox := cluster.NewCentralizedOutbox(ctx, k8sClients)
+	cluster.Conduct(ctx, cfg.Tasks, outbox)
 }
 
-func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
-	configPath := os.Args[2]
-	if configPath == "" {
+func runDistributedMode(ctx context.Context, cancel context.CancelFunc) {
+	if len(os.Args) < 3 {
 		logger.Fatal("Config path is required")
 	}
-	config, err := utils.LoadDistributedConfig(configPath)
+	configPath := os.Args[2]
+
+	cfg, err := config.LoadDistributed(configPath)
 	if err != nil {
 		logger.Fatalf("Failed to load config: %v", err)
 	}
 
-	if err != nil {
-		logger.Fatalf("Failed to load distributed tasks: %v", err)
-	}
-
-	tasks := config.Tasks
-
 	// Initialize leader election
-	elector, etcdClient, err := distributedCluster.NewLeaderElector(distributedCluster.Config{
-		EtcdEndpoints: config.EtcdEndpoints,
-		Name:          config.Name,
+	elector, etcdClient, err := cluster.NewLeaderElector(cluster.LeaderConfig{
+		EtcdEndpoints: cfg.EtcdEndpoints,
+		Name:          cfg.Name,
 		LeaderFn: func(ctx context.Context, epoch int64, epochKey string, client *clientv3.Client) error {
-			outbox := distributedCluster.NewOutbox(ctx, epoch, epochKey, client, tasks)
-			cluster.Conduct(ctx, tasks, outbox)
+			outbox := cluster.NewDistributedOutbox(ctx, epoch, epochKey, client, cfg.Tasks)
+			cluster.Conduct(ctx, cfg.Tasks, outbox)
 			logger.Info("Tasks are conducted")
 			<-ctx.Done() // Wait for leadership to be lost
 			return nil
@@ -107,24 +103,24 @@ func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
 		logger.Fatalf("Failed to initialize Kubernetes client: %v", err)
 	}
 
-	// Initialize Epoch Validator
+	// Initialize validators
 	epochValidator := server.NewEpochValidator(etcdClient)
-	idempotencyValidator := server.NewIdempotencyValidator(etcdClient, config.Name)
+	idempotencyValidator := server.NewIdempotencyValidator(etcdClient, cfg.Name)
 
 	// Initialize HTTP Server
-	srvHandler := server.NewHandler(k8sClient, epochValidator, idempotencyValidator, etcdClient, config.Name)
-	srv := server.NewServer(server.Config{Port: config.Server.Port}, srvHandler)
+	srvHandler := server.NewHandler(k8sClient, epochValidator, idempotencyValidator, etcdClient, cfg.Name)
+	srv := server.NewServer(server.Config{Port: cfg.Server.Port}, srvHandler)
 
 	// Start server in background
 	go func() {
-		logger.Infof("Starting HTTP server on port %d", config.Server.Port)
+		logger.Infof("Starting HTTP server on port %d", cfg.Server.Port)
 		if err := srv.Run(ctx); err != nil {
 			logger.Errorf("HTTP server error: %v", err)
 			cancel()
 		}
 	}()
 
-	logger.Infof("Participating in leader election (ID: %s)...", config.Name)
+	logger.Infof("Participating in leader election (ID: %s)...", cfg.Name)
 	if err := elector.Run(ctx); err != nil {
 		if err != context.Canceled {
 			logger.Fatalf("Leader election error: %v", err)

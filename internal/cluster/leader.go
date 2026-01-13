@@ -1,4 +1,4 @@
-package distributed
+package cluster
 
 import (
 	"context"
@@ -27,12 +27,11 @@ type LeaderElector struct {
 	epochKey string
 	leaseTTL int
 	leaderFn LeaderFunc
-	// backoff defines how long to wait before retrying when errors occur.
-	backoff time.Duration
+	backoff  time.Duration
 }
 
-// Config defines the inputs required to build a LeaderElector.
-type Config struct {
+// LeaderConfig defines the inputs required to build a LeaderElector.
+type LeaderConfig struct {
 	// EtcdEndpoints are the etcd endpoints. Required.
 	EtcdEndpoints []string
 	// Name is the unique identifier for this elector. Required.
@@ -51,11 +50,9 @@ type Config struct {
 
 // NewLeaderElector validates the config, creates an etcd client, and returns a ready to use LeaderElector.
 // Returns the LeaderElector and the etcd client (which should be closed by the caller).
-func NewLeaderElector(cfg Config) (*LeaderElector, *clientv3.Client, error) {
+func NewLeaderElector(cfg LeaderConfig) (*LeaderElector, *clientv3.Client, error) {
 	if len(cfg.EtcdEndpoints) == 0 {
-		err := errors.New("etcd endpoints are required")
-		logger.Error("NewLeaderElector: etcd endpoints are required")
-		return nil, nil, err
+		return nil, nil, errors.New("etcd endpoints are required")
 	}
 
 	client, err := clientv3.New(clientv3.Config{
@@ -69,16 +66,12 @@ func NewLeaderElector(cfg Config) (*LeaderElector, *clientv3.Client, error) {
 
 	if cfg.Name == "" {
 		client.Close()
-		err := errors.New("name is required")
-		logger.Error("NewLeaderElector: name is required")
-		return nil, nil, err
+		return nil, nil, errors.New("name is required")
 	}
 
 	if cfg.LeaderFn == nil {
 		client.Close()
-		err := errors.New("leader function is required")
-		logger.Error("NewLeaderElector: leader function is required")
-		return nil, nil, err
+		return nil, nil, errors.New("leader function is required")
 	}
 
 	prefix := cfg.Prefix
@@ -169,7 +162,6 @@ func (e *LeaderElector) Run(ctx context.Context) error {
 		}
 
 		cancel()
-		// The leader function should watch leaderCtx. Done channel is waited leader function to exit.
 		<-done
 
 		resignCtx, resignCancel := context.WithTimeout(context.Background(), 2*time.Second)
