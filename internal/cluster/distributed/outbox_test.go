@@ -327,16 +327,19 @@ func TestOutbox_AddTask_StepError(t *testing.T) {
 		t.Fatalf("unexpected error adding task: %v", err)
 	}
 
-	// Give some time for the task to execute
-	time.Sleep(200 * time.Millisecond)
+	// Give time for the task to execute including all retries
+	// Retries: initial + 1s + 2s + 4s = ~7-8 seconds total
+	time.Sleep(8 * time.Second)
 
-	// Action1 should be executed, action2 should be attempted, action3 should not
+	// Action1 should be executed once
 	if action1.executeCalled.Load() != 1 {
 		t.Errorf("expected action1 to be executed once, got %d", action1.executeCalled.Load())
 	}
-	if action2.executeCalled.Load() != 1 {
-		t.Errorf("expected action2 to be executed once, got %d", action2.executeCalled.Load())
+	// Action2 should be attempted 4 times (1 initial + 3 retries with maxRetries=3)
+	if action2.executeCalled.Load() != 4 {
+		t.Errorf("expected action2 to be executed 4 times (with retries), got %d", action2.executeCalled.Load())
 	}
+	// Action3 should not be executed since action2 always fails
 	if action3.executeCalled.Load() != 0 {
 		t.Errorf("expected action3 to not be executed, got %d", action3.executeCalled.Load())
 	}
