@@ -3,7 +3,18 @@ package task
 import (
 	"context"
 	"time"
+
+	"github.com/esadakcam/conductor/internal/k8s"
 )
+
+// ExecutionContext provides access to execution-time resources for actions and conditions.
+// It abstracts the differences between centralized mode (direct k8s clients) and
+// distributed mode (epoch-based coordination via HTTP).
+type ExecutionContext interface {
+	GetEpoch() int64
+	GetIdempotencyKey() string
+	GetK8sClients() map[string]*k8s.Client
+}
 
 type ConditionType string
 
@@ -60,12 +71,12 @@ type TaskInterface interface {
 }
 
 type Condition interface {
-	Evaluate(ctx context.Context, payload any) (bool, error)
+	Evaluate(ctx context.Context, ec ExecutionContext) (bool, error)
 	GetType() ConditionType
 }
 
 type Action interface {
-	Execute(ctx context.Context, payload any) error
+	Execute(ctx context.Context, ec ExecutionContext) error
 	GetType() ActionType
 }
 

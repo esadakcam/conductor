@@ -321,7 +321,8 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 				}
 			}
 
-			result, err := tt.condition.Evaluate(context.Background(), nil)
+			ec := NewMockExecutionContext(0, "")
+			result, err := tt.condition.Evaluate(context.Background(), ec)
 
 			if tt.expectedError {
 				if err == nil {
@@ -349,7 +350,8 @@ func TestConditionK8sDeploymentReady_Evaluate_InvalidEndpoint(t *testing.T) {
 		},
 	}
 
-	result, err := condition.Evaluate(context.Background(), nil)
+	ec := NewMockExecutionContext(0, "")
+	result, err := condition.Evaluate(context.Background(), ec)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")

@@ -17,7 +17,7 @@ import (
 	"github.com/esadakcam/conductor/internal/utils/httpclient"
 )
 
-func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context, payload any) (bool, error) {
+func (c *ConditionEndpointSuccess) Evaluate(ctx context.Context, ec task.ExecutionContext) (bool, error) {
 	if c.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
 		logger.Error("ConditionEndpointSuccess: endpoint is required")
@@ -65,7 +65,7 @@ func (c *ConditionEndpointSuccess) GetType() task.ConditionType {
 	return task.ConditionTypeEndpointSuccess
 }
 
-func (c *ConditionEndpointValue) Evaluate(ctx context.Context, payload any) (bool, error) {
+func (c *ConditionEndpointValue) Evaluate(ctx context.Context, ec task.ExecutionContext) (bool, error) {
 	if c.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
 		logger.Error("ConditionEndpointValue: endpoint is required")
@@ -127,7 +127,7 @@ func (c *ConditionEndpointValue) GetType() task.ConditionType {
 	return task.ConditionTypeEndpointValue
 }
 
-func (c *ConditionPrometheusMetric) Evaluate(ctx context.Context, payload any) (bool, error) {
+func (c *ConditionPrometheusMetric) Evaluate(ctx context.Context, ec task.ExecutionContext) (bool, error) {
 	if c.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
 		logger.Error("ConditionPrometheusMetric: endpoint is required")
@@ -229,7 +229,7 @@ func (c *ConditionPrometheusMetric) GetType() task.ConditionType {
 	return task.ConditionTypePrometheusMetric
 }
 
-func (c *ConditionAlwaysTrue) Evaluate(ctx context.Context, payload any) (bool, error) {
+func (c *ConditionAlwaysTrue) Evaluate(ctx context.Context, ec task.ExecutionContext) (bool, error) {
 	return true, nil
 }
 

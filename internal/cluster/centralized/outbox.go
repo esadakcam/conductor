@@ -4,23 +4,22 @@ import (
 	"context"
 	"sync"
 
-	"github.com/esadakcam/conductor/internal/k8s"
 	"github.com/esadakcam/conductor/internal/task"
 )
 
 type Outbox struct {
-	ctx            context.Context
-	mu             sync.Mutex
-	executingTasks map[string]bool
-	k8sClients     map[string]*k8s.Client
+	ctx              context.Context
+	mu               sync.Mutex
+	executingTasks   map[string]bool
+	executionContext *ExecutionContext
 }
 
-func NewOutbox(ctx context.Context, k8sClients map[string]*k8s.Client) *Outbox {
+func NewOutbox(ctx context.Context, executionContext *ExecutionContext) *Outbox {
 	return &Outbox{
-		ctx:            ctx,
-		mu:             sync.Mutex{},
-		executingTasks: make(map[string]bool),
-		k8sClients:     k8sClients,
+		ctx:              ctx,
+		mu:               sync.Mutex{},
+		executingTasks:   make(map[string]bool),
+		executionContext: executionContext,
 	}
 }
 
@@ -39,9 +38,8 @@ func (o *Outbox) ExecuteTask(t task.TaskInterface) error {
 	o.executingTasks[t.GetName()] = true
 	o.mu.Unlock()
 
-	payload := o.GetPayload()
 	for _, action := range t.GetActions() {
-		if err := action.Execute(o.ctx, payload); err != nil {
+		if err := action.Execute(o.ctx, o.executionContext); err != nil {
 			o.mu.Lock()
 			o.executingTasks[t.GetName()] = false
 			o.mu.Unlock()
@@ -54,9 +52,7 @@ func (o *Outbox) ExecuteTask(t task.TaskInterface) error {
 	return nil
 }
 
-// GetPayload returns the payload containing k8s clients for condition evaluation.
-func (o *Outbox) GetPayload() any {
-	return map[string]any{
-		"k8sClients": o.k8sClients,
-	}
+// GetExecutionContext returns the execution context for condition evaluation.
+func (o *Outbox) GetExecutionContext() task.ExecutionContext {
+	return o.executionContext
 }

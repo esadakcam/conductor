@@ -13,16 +13,8 @@ import (
 	"github.com/esadakcam/conductor/internal/utils/httpclient"
 )
 
-func (a *ActionEndpoint) Execute(ctx context.Context, payload any) error {
-	var idempotencyId string
-	if payload != nil {
-		var err error
-		idempotencyId, err = getOptionalIdempotencyID(payload)
-		if err != nil {
-			logger.Errorf("ActionEndpoint: failed to get payload: %v", err)
-			return fmt.Errorf("failed to get payload: %w", err)
-		}
-	}
+func (a *ActionEndpoint) Execute(ctx context.Context, ec task.ExecutionContext) error {
+	idempotencyId := ec.GetIdempotencyKey()
 
 	if a.Endpoint == "" {
 		err := fmt.Errorf("endpoint is required")
@@ -86,7 +78,7 @@ func (a *ActionEndpoint) GetType() task.ActionType {
 	return task.ActionTypeEndpoint
 }
 
-func (a *ActionEcho) Execute(ctx context.Context, payload any) error {
+func (a *ActionEcho) Execute(ctx context.Context, ec task.ExecutionContext) error {
 	logger.Info(a.Message)
 	return nil
 }
@@ -95,7 +87,7 @@ func (a *ActionEcho) GetType() task.ActionType {
 	return task.ActionTypeEcho
 }
 
-func (a *ActionDelay) Execute(ctx context.Context, payload any) error {
+func (a *ActionDelay) Execute(ctx context.Context, ec task.ExecutionContext) error {
 	logger.Infof("ActionDelay: sleeping for %s", a.Time)
 	select {
 	case <-time.After(a.Time):
@@ -107,18 +99,4 @@ func (a *ActionDelay) Execute(ctx context.Context, payload any) error {
 
 func (a *ActionDelay) GetType() task.ActionType {
 	return task.ActionTypeDelay
-}
-
-func getOptionalIdempotencyID(payload any) (string, error) {
-	data, ok := payload.(map[string]any)
-	if !ok {
-		return "", fmt.Errorf("invalid payload format")
-	}
-
-	idempotencyID, ok := data["idempotencyId"].(string)
-	if !ok || idempotencyID == "" {
-		return "", nil
-	}
-
-	return idempotencyID, nil
 }
