@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/esadakcam/conductor/internal/task"
-	taskdistributed "github.com/esadakcam/conductor/internal/task/distributed"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -37,7 +36,7 @@ func (m *mockTask) GetActions() []task.Action {
 type mockAction struct {
 	executeCalled *atomic.Int32
 	executeErr    error
-	executeFn     func(ctx context.Context, payload any) error
+	executeFn     func(ctx context.Context, ec task.ExecutionContext) error
 }
 
 func newMockAction() *mockAction {
@@ -46,10 +45,10 @@ func newMockAction() *mockAction {
 	}
 }
 
-func (m *mockAction) Execute(ctx context.Context, payload any) error {
+func (m *mockAction) Execute(ctx context.Context, ec task.ExecutionContext) error {
 	m.executeCalled.Add(1)
 	if m.executeFn != nil {
-		return m.executeFn(ctx, payload)
+		return m.executeFn(ctx, ec)
 	}
 	return m.executeErr
 }
@@ -482,7 +481,7 @@ func TestOutbox_AddTask_ConcurrentSameTask(t *testing.T) {
 
 	var executionCount atomic.Int32
 	action := newMockAction()
-	action.executeFn = func(ctx context.Context, payload any) error {
+	action.executeFn = func(ctx context.Context, ec task.ExecutionContext) error {
 		executionCount.Add(1)
 		time.Sleep(50 * time.Millisecond) // Simulate some work
 		return nil
@@ -558,7 +557,7 @@ func TestOutbox_FullfillTask_ContextCancellation(t *testing.T) {
 
 	actionCalled := make(chan struct{}, 1)
 	action := newMockAction()
-	action.executeFn = func(ctx context.Context, payload any) error {
+	action.executeFn = func(ctx context.Context, ec task.ExecutionContext) error {
 		actionCalled <- struct{}{}
 		<-ctx.Done()
 		return ctx.Err()
@@ -598,14 +597,9 @@ func TestOutbox_IdempotencyId_Uniqueness(t *testing.T) {
 	var mu sync.Mutex
 
 	action := newMockAction()
-	action.executeFn = func(ctx context.Context, payload any) error {
+	action.executeFn = func(ctx context.Context, ec task.ExecutionContext) error {
 		mu.Lock()
-		_, idempotencyId, err := taskdistributed.GetPayload(payload)
-		if err != nil {
-			mu.Unlock()
-			return err
-		}
-		idempotencyIds = append(idempotencyIds, idempotencyId)
+		idempotencyIds = append(idempotencyIds, ec.GetIdempotencyKey())
 		mu.Unlock()
 		return nil
 	}
@@ -684,7 +678,7 @@ func TestOutbox_Init_ExecutesWhileAddTaskSkips(t *testing.T) {
 	actionStarted := make(chan struct{}, 1)
 
 	action := newMockAction()
-	action.executeFn = func(ctx context.Context, payload any) error {
+	action.executeFn = func(ctx context.Context, ec task.ExecutionContext) error {
 		executionCount.Add(1)
 
 		// Signal that action has started
