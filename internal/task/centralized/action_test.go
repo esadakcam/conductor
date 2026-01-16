@@ -1421,4 +1421,3 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		}
 	})
 }
-

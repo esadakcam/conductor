@@ -381,4 +381,3 @@ func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, ec task.Executio
 	logger.Infof("Successfully scaled deployment %s/%s to %d replicas via %s", namespace, a.Deployment, a.Replicas, a.Member)
 	return nil
 }
-

@@ -19,7 +19,7 @@ func (m *mockCondition) UnmarshalYAML(unmarshal func(interface{}) error) error {
 func (m *mockCondition) Evaluate(ctx context.Context, ec ExecutionContext) (bool, error) {
 	return true, nil
 }
-func (m *mockCondition) GetType() ConditionType                                  { return ConditionTypeEndpointSuccess }
+func (m *mockCondition) GetType() ConditionType { return ConditionTypeEndpointSuccess }
 
 // mockAlwaysTrueCondition implements the Condition interface for testing
 type mockAlwaysTrueCondition struct {
@@ -84,7 +84,7 @@ func (m *mockAction) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalActionEndpoint(unmarshal, &m.ActionEndpointData)
 }
 func (m *mockAction) Execute(ctx context.Context, ec ExecutionContext) error { return nil }
-func (m *mockAction) GetType() ActionType                            { return ActionTypeEndpoint }
+func (m *mockAction) GetType() ActionType                                    { return ActionTypeEndpoint }
 
 // mockEchoAction implements the Action interface for testing
 type mockEchoAction struct {
@@ -95,7 +95,7 @@ func (m *mockEchoAction) UnmarshalYAML(unmarshal func(interface{}) error) error 
 	return UnmarshalActionEcho(unmarshal, &m.ActionEchoData)
 }
 func (m *mockEchoAction) Execute(ctx context.Context, ec ExecutionContext) error { return nil }
-func (m *mockEchoAction) GetType() ActionType                            { return ActionTypeEcho }
+func (m *mockEchoAction) GetType() ActionType                                    { return ActionTypeEcho }
 
 // mockDelayAction implements the Action interface for testing
 type mockDelayAction struct {
@@ -106,7 +106,7 @@ func (m *mockDelayAction) UnmarshalYAML(unmarshal func(interface{}) error) error
 	return UnmarshalActionDelay(unmarshal, &m.ActionDelayData)
 }
 func (m *mockDelayAction) Execute(ctx context.Context, ec ExecutionContext) error { return nil }
-func (m *mockDelayAction) GetType() ActionType                            { return ActionTypeDelay }
+func (m *mockDelayAction) GetType() ActionType                                    { return ActionTypeDelay }
 
 // mockConfigValueSumAction implements the Action interface for testing
 type mockConfigValueSumAction struct {
@@ -116,8 +116,10 @@ type mockConfigValueSumAction struct {
 func (m *mockConfigValueSumAction) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalActionConfigValueSum(unmarshal, &m.ActionConfigValueSumData)
 }
-func (m *mockConfigValueSumAction) Execute(ctx context.Context, ec ExecutionContext) error { return nil }
-func (m *mockConfigValueSumAction) GetType() ActionType                            { return ActionTypeConfigValueSum }
+func (m *mockConfigValueSumAction) Execute(ctx context.Context, ec ExecutionContext) error {
+	return nil
+}
+func (m *mockConfigValueSumAction) GetType() ActionType { return ActionTypeConfigValueSum }
 
 // mockK8sExecDeploymentAction implements the Action interface for testing
 type mockK8sExecDeploymentAction struct {
@@ -127,7 +129,9 @@ type mockK8sExecDeploymentAction struct {
 func (m *mockK8sExecDeploymentAction) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalActionK8sExecDeployment(unmarshal, &m.ActionK8sExecDeploymentData)
 }
-func (m *mockK8sExecDeploymentAction) Execute(ctx context.Context, ec ExecutionContext) error { return nil }
+func (m *mockK8sExecDeploymentAction) Execute(ctx context.Context, ec ExecutionContext) error {
+	return nil
+}
 func (m *mockK8sExecDeploymentAction) GetType() ActionType {
 	return ActionTypeK8sExecDeployment
 }
@@ -140,7 +144,9 @@ type mockK8sRestartDeploymentAction struct {
 func (m *mockK8sRestartDeploymentAction) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalActionK8sRestartDeployment(unmarshal, &m.ActionK8sRestartDeploymentData)
 }
-func (m *mockK8sRestartDeploymentAction) Execute(ctx context.Context, ec ExecutionContext) error { return nil }
+func (m *mockK8sRestartDeploymentAction) Execute(ctx context.Context, ec ExecutionContext) error {
+	return nil
+}
 func (m *mockK8sRestartDeploymentAction) GetType() ActionType {
 	return ActionTypeK8sRestartDeployment
 }
@@ -168,7 +174,9 @@ type mockK8sUpdateConfigMapAction struct {
 func (m *mockK8sUpdateConfigMapAction) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalActionK8sUpdateConfigMap(unmarshal, &m.ActionK8sUpdateConfigMapData)
 }
-func (m *mockK8sUpdateConfigMapAction) Execute(ctx context.Context, ec ExecutionContext) error { return nil }
+func (m *mockK8sUpdateConfigMapAction) Execute(ctx context.Context, ec ExecutionContext) error {
+	return nil
+}
 func (m *mockK8sUpdateConfigMapAction) GetType() ActionType {
 	return ActionTypeK8sUpdateConfigMap
 }
@@ -181,7 +189,9 @@ type mockK8sScaleDeploymentAction struct {
 func (m *mockK8sScaleDeploymentAction) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return UnmarshalActionK8sScaleDeployment(unmarshal, &m.ActionK8sScaleDeploymentData)
 }
-func (m *mockK8sScaleDeploymentAction) Execute(ctx context.Context, ec ExecutionContext) error { return nil }
+func (m *mockK8sScaleDeploymentAction) Execute(ctx context.Context, ec ExecutionContext) error {
+	return nil
+}
 func (m *mockK8sScaleDeploymentAction) GetType() ActionType {
 	return ActionTypeK8sScaleDeployment
 }
