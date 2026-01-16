@@ -293,8 +293,8 @@ func TestActionEndpoint_Execute(t *testing.T) {
 				defer server.Close()
 				tt.action.Endpoint = server.URL
 			}
-			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 0}
-			err := tt.action.Execute(context.Background(), payload)
+			ec := NewMockExecutionContext(0, uuid.New().String())
+			err := tt.action.Execute(context.Background(), ec)
 
 			if tt.expectedError {
 				if err == nil {
@@ -317,9 +317,9 @@ func TestActionEndpoint_Execute_InvalidEndpoint(t *testing.T) {
 		},
 	}
 
-	payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 0}
+	ec := NewMockExecutionContext(0, uuid.New().String())
 
-	err := action.Execute(context.Background(), payload)
+	err := action.Execute(context.Background(), ec)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -360,8 +360,8 @@ func TestActionEndpoint_Execute_HTTPStatusCodes(t *testing.T) {
 					Method:   "GET",
 				},
 			}
-			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 0}
-			err := action.Execute(context.Background(), payload)
+			ec := NewMockExecutionContext(0, uuid.New().String())
+			err := action.Execute(context.Background(), ec)
 
 			if tc.expectedError {
 				if err == nil {
@@ -390,7 +390,8 @@ func TestActionEcho_Execute(t *testing.T) {
 		},
 	}
 
-	err := action.Execute(context.Background(), nil)
+	ec := NewMockExecutionContext(0, "")
+	err := action.Execute(context.Background(), ec)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -411,8 +412,9 @@ func TestActionDelay_Execute(t *testing.T) {
 			},
 		}
 
+		ec := NewMockExecutionContext(0, "")
 		start := time.Now()
-		err := action.Execute(context.Background(), nil)
+		err := action.Execute(context.Background(), ec)
 		elapsed := time.Since(start)
 
 		if err != nil {
@@ -434,7 +436,8 @@ func TestActionDelay_Execute(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		err := action.Execute(ctx, nil)
+		ec := NewMockExecutionContext(0, "")
+		err := action.Execute(ctx, ec)
 		if err == nil {
 			t.Errorf("expected error due to context cancellation, got none")
 		}

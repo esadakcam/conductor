@@ -13,7 +13,7 @@ import (
 	"github.com/esadakcam/conductor/internal/utils/httpclient"
 )
 
-func (c *ConditionK8sDeploymentReady) Evaluate(ctx context.Context, payload any) (bool, error) {
+func (c *ConditionK8sDeploymentReady) Evaluate(ctx context.Context, ec task.ExecutionContext) (bool, error) {
 	if c.Member == "" {
 		err := fmt.Errorf("member is required")
 		logger.Error("ConditionK8sDeploymentReady: member is required")

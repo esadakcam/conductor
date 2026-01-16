@@ -15,12 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func (a *ActionConfigValueSum) Execute(ctx context.Context, payload any) error {
-	k8sClients, err := getK8sClients(payload)
-	if err != nil {
-		logger.Errorf("ActionConfigValueSum: failed to get k8s clients: %v", err)
-		return fmt.Errorf("failed to get k8s clients: %w", err)
-	}
+func (a *ActionConfigValueSum) Execute(ctx context.Context, ec task.ExecutionContext) error {
+	k8sClients := ec.GetK8sClients()
 
 	namespace := a.Namespace
 	if namespace == "" {
@@ -142,12 +138,8 @@ func (a *ActionConfigValueSum) GetType() task.ActionType {
 	return task.ActionTypeConfigValueSum
 }
 
-func (a *ActionK8sExecDeployment) Execute(ctx context.Context, payload any) error {
-	k8sClients, err := getK8sClients(payload)
-	if err != nil {
-		logger.Errorf("ActionK8sExecDeployment: failed to get k8s clients: %v", err)
-		return fmt.Errorf("failed to get k8s clients: %w", err)
-	}
+func (a *ActionK8sExecDeployment) Execute(ctx context.Context, ec task.ExecutionContext) error {
+	k8sClients := ec.GetK8sClients()
 
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
@@ -204,12 +196,8 @@ func (a *ActionK8sExecDeployment) GetType() task.ActionType {
 	return task.ActionTypeK8sExecDeployment
 }
 
-func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, payload any) error {
-	k8sClients, err := getK8sClients(payload)
-	if err != nil {
-		logger.Errorf("ActionK8sRestartDeployment: failed to get k8s clients: %v", err)
-		return fmt.Errorf("failed to get k8s clients: %w", err)
-	}
+func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, ec task.ExecutionContext) error {
+	k8sClients := ec.GetK8sClients()
 
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
@@ -267,12 +255,8 @@ func (a *ActionK8sRestartDeployment) GetType() task.ActionType {
 	return task.ActionTypeK8sRestartDeployment
 }
 
-func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, payload any) error {
-	k8sClients, err := getK8sClients(payload)
-	if err != nil {
-		logger.Errorf("ActionK8sWaitDeploymentRollout: failed to get k8s clients: %v", err)
-		return fmt.Errorf("failed to get k8s clients: %w", err)
-	}
+func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, ec task.ExecutionContext) error {
+	k8sClients := ec.GetK8sClients()
 
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
@@ -305,7 +289,7 @@ func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, payload an
 
 	logger.Infof("Waiting for deployment %s/%s rollout via member %s (timeout: %s)", namespace, a.Deployment, a.Member, timeout)
 
-	err = client.WaitForDeploymentRollout(ctx, namespace, a.Deployment, timeout)
+	err := client.WaitForDeploymentRollout(ctx, namespace, a.Deployment, timeout)
 	if err != nil {
 		logger.Errorf("ActionK8sWaitDeploymentRollout: failed to wait for deployment %s/%s rollout: %v", namespace, a.Deployment, err)
 		return fmt.Errorf("failed to wait for deployment rollout: %w", err)
@@ -319,12 +303,8 @@ func (a *ActionK8sWaitDeploymentRollout) GetType() task.ActionType {
 	return task.ActionTypeK8sWaitDeploymentRollout
 }
 
-func (a *ActionK8sUpdateConfigMap) Execute(ctx context.Context, payload any) error {
-	k8sClients, err := getK8sClients(payload)
-	if err != nil {
-		logger.Errorf("ActionK8sUpdateConfigMap: failed to get k8s clients: %v", err)
-		return fmt.Errorf("failed to get k8s clients: %w", err)
-	}
+func (a *ActionK8sUpdateConfigMap) Execute(ctx context.Context, ec task.ExecutionContext) error {
+	k8sClients := ec.GetK8sClients()
 
 	if a.ConfigMap == "" {
 		err := fmt.Errorf("config_map name is required")
@@ -384,12 +364,8 @@ func (a *ActionK8sUpdateConfigMap) GetType() task.ActionType {
 	return task.ActionTypeK8sUpdateConfigMap
 }
 
-func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, payload any) error {
-	k8sClients, err := getK8sClients(payload)
-	if err != nil {
-		logger.Errorf("ActionK8sScaleDeployment: failed to get k8s clients: %v", err)
-		return fmt.Errorf("failed to get k8s clients: %w", err)
-	}
+func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, ec task.ExecutionContext) error {
+	k8sClients := ec.GetK8sClients()
 
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")

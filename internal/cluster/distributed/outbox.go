@@ -105,10 +105,11 @@ func (o *Outbox) ExecuteTask(toExecute task.TaskInterface) error {
 	return nil
 }
 
-// GetPayload returns nil for distributed mode as conditions use HTTP-based
-// communication instead of direct k8s clients.
-func (o *Outbox) GetPayload() any {
-	return nil
+// GetExecutionContext returns an execution context for condition evaluation.
+// In distributed mode, conditions use HTTP-based communication so the context
+// has empty idempotency key (only actions need it).
+func (o *Outbox) GetExecutionContext() task.ExecutionContext {
+	return NewExecutionContext(o.epoch, "")
 }
 
 func executeWithRetry(ctx context.Context, operation string, fn func() error) error {
@@ -178,15 +179,12 @@ func (o *Outbox) fulfillTaskFromOutbox(t task.TaskInterface) error {
 	}
 
 	for i := item.TaskStep; i < int64(len(t.GetActions())); i++ {
-		payload := map[string]any{
-			"idempotencyId": item.ID.String(),
-			"epoch":         o.epoch,
-		}
+		ec := NewExecutionContext(o.epoch, item.ID.String())
 
 		operation := fmt.Sprintf("task %s step %d", t.GetName(), i)
 		// Since members are idempotent, we can safely retry the operation.
 		err = executeWithRetry(o.ctx, operation, func() error {
-			return t.GetActions()[i].Execute(o.ctx, payload)
+			return t.GetActions()[i].Execute(o.ctx, ec)
 		})
 		if err != nil {
 			return err

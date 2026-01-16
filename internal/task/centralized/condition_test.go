@@ -82,11 +82,11 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 			},
 		}
 
-		payload := createK8sClientsPayload(map[string]*k8s.Client{
+		ec := createMockEC(map[string]*k8s.Client{
 			"member1": client,
 		})
 
-		result, err := condition.Evaluate(ctx, payload)
+		result, err := condition.Evaluate(ctx, ec)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -154,11 +154,11 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 			},
 		}
 
-		payload := createK8sClientsPayload(map[string]*k8s.Client{
+		ec := createMockEC(map[string]*k8s.Client{
 			"member1": client,
 		})
 
-		result, err := condition.Evaluate(ctx, payload)
+		result, err := condition.Evaluate(ctx, ec)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -222,11 +222,11 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 			},
 		}
 
-		payload := createK8sClientsPayload(map[string]*k8s.Client{
+		ec := createMockEC(map[string]*k8s.Client{
 			"member1": client,
 		})
 
-		result, err := condition.Evaluate(ctx, payload)
+		result, err := condition.Evaluate(ctx, ec)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -294,11 +294,11 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 			},
 		}
 
-		payload := createK8sClientsPayload(map[string]*k8s.Client{
+		ec := createMockEC(map[string]*k8s.Client{
 			"member1": client,
 		})
 
-		result, err := condition.Evaluate(ctx, payload)
+		result, err := condition.Evaluate(ctx, ec)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -317,11 +317,11 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 			},
 		}
 
-		payload := createK8sClientsPayload(map[string]*k8s.Client{
+		ec := createMockEC(map[string]*k8s.Client{
 			"member1": client,
 		})
 
-		_, err := condition.Evaluate(ctx, payload)
+		_, err := condition.Evaluate(ctx, ec)
 		if err == nil {
 			t.Error("expected error for missing member")
 		}
@@ -337,11 +337,11 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 			},
 		}
 
-		payload := createK8sClientsPayload(map[string]*k8s.Client{
+		ec := createMockEC(map[string]*k8s.Client{
 			"member1": client,
 		})
 
-		_, err := condition.Evaluate(ctx, payload)
+		_, err := condition.Evaluate(ctx, ec)
 		if err == nil {
 			t.Error("expected error for missing deployment name")
 		}
@@ -357,11 +357,11 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 			},
 		}
 
-		payload := createK8sClientsPayload(map[string]*k8s.Client{
+		ec := createMockEC(map[string]*k8s.Client{
 			"member1": client,
 		})
 
-		_, err := condition.Evaluate(ctx, payload)
+		_, err := condition.Evaluate(ctx, ec)
 		if err == nil {
 			t.Error("expected error for missing k8s client")
 		}
@@ -377,17 +377,17 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 			},
 		}
 
-		payload := createK8sClientsPayload(map[string]*k8s.Client{
+		ec := createMockEC(map[string]*k8s.Client{
 			"member1": client,
 		})
 
-		_, err := condition.Evaluate(ctx, payload)
+		_, err := condition.Evaluate(ctx, ec)
 		if err == nil {
 			t.Error("expected error for non-existent deployment")
 		}
 	})
 
-	t.Run("invalid payload format returns error", func(t *testing.T) {
+	t.Run("nil k8s clients for member returns error", func(t *testing.T) {
 		condition := &ConditionK8sDeploymentReady{
 			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
 				Member:     "member1",
@@ -397,29 +397,11 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 			},
 		}
 
-		_, err := condition.Evaluate(ctx, "invalid payload")
+		ec := createMockEC(map[string]*k8s.Client{})
+
+		_, err := condition.Evaluate(ctx, ec)
 		if err == nil {
-			t.Error("expected error for invalid payload format")
-		}
-	})
-
-	t.Run("missing k8sClients in payload returns error", func(t *testing.T) {
-		condition := &ConditionK8sDeploymentReady{
-			ConditionK8sDeploymentReadyData: task.ConditionK8sDeploymentReadyData{
-				Member:     "member1",
-				Deployment: "test-deployment",
-				Namespace:  ns,
-				Replicas:   1,
-			},
-		}
-
-		payload := map[string]any{
-			"other": "data",
-		}
-
-		_, err := condition.Evaluate(ctx, payload)
-		if err == nil {
-			t.Error("expected error for missing k8sClients in payload")
+			t.Error("expected error for missing k8s client")
 		}
 	})
 
@@ -478,11 +460,11 @@ func TestConditionK8sDeploymentReady_Evaluate(t *testing.T) {
 			},
 		}
 
-		payload := createK8sClientsPayload(map[string]*k8s.Client{
+		ec := createMockEC(map[string]*k8s.Client{
 			"member1": client,
 		})
 
-		result, err := condition.Evaluate(ctx, payload)
+		result, err := condition.Evaluate(ctx, ec)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}

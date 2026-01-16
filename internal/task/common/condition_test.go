@@ -147,7 +147,8 @@ func TestConditionEndpointSuccess_Evaluate(t *testing.T) {
 				tt.condition.Endpoint = server.URL
 			}
 
-			result, err := tt.condition.Evaluate(context.Background(), nil)
+			ec := NewMockExecutionContext(0, "")
+			result, err := tt.condition.Evaluate(context.Background(), ec)
 
 			if tt.expectedError {
 				if err == nil {
@@ -173,7 +174,8 @@ func TestConditionEndpointSuccess_Evaluate_InvalidEndpoint(t *testing.T) {
 		},
 	}
 
-	result, err := condition.Evaluate(context.Background(), nil)
+	ec := NewMockExecutionContext(0, "")
+	result, err := condition.Evaluate(context.Background(), ec)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -525,7 +527,8 @@ func TestConditionEndpointValue_Evaluate(t *testing.T) {
 				tt.condition.Endpoint = server.URL
 			}
 
-			result, err := tt.condition.Evaluate(context.Background(), nil)
+			ec := NewMockExecutionContext(0, "")
+			result, err := tt.condition.Evaluate(context.Background(), ec)
 
 			if tt.expectedError {
 				if err == nil {
@@ -552,7 +555,8 @@ func TestConditionEndpointValue_Evaluate_InvalidEndpoint(t *testing.T) {
 		},
 	}
 
-	result, err := condition.Evaluate(context.Background(), nil)
+	ec := NewMockExecutionContext(0, "")
+	result, err := condition.Evaluate(context.Background(), ec)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -1067,7 +1071,8 @@ cpu_usage 75.5
 				}
 			}
 
-			result, err := tt.condition.Evaluate(context.Background(), nil)
+			ec := NewMockExecutionContext(0, "")
+			result, err := tt.condition.Evaluate(context.Background(), ec)
 
 			if tt.expectedError {
 				if err == nil {
@@ -1095,7 +1100,8 @@ func TestConditionPrometheusMetric_Evaluate_InvalidEndpoint(t *testing.T) {
 		},
 	}
 
-	result, err := condition.Evaluate(context.Background(), nil)
+	ec := NewMockExecutionContext(0, "")
+	result, err := condition.Evaluate(context.Background(), ec)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -1203,7 +1209,8 @@ labeled_metric{env="dev"} 50
 func TestConditionAlwaysTrue_Evaluate(t *testing.T) {
 	condition := &ConditionAlwaysTrue{}
 
-	result, err := condition.Evaluate(context.Background(), nil)
+	ec := NewMockExecutionContext(0, "")
+	result, err := condition.Evaluate(context.Background(), ec)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -1213,11 +1220,12 @@ func TestConditionAlwaysTrue_Evaluate(t *testing.T) {
 	}
 }
 
-func TestConditionAlwaysTrue_Evaluate_WithPayload(t *testing.T) {
+func TestConditionAlwaysTrue_Evaluate_WithExecutionContext(t *testing.T) {
 	condition := &ConditionAlwaysTrue{}
 
-	// Should work with any payload
-	result, err := condition.Evaluate(context.Background(), map[string]any{"key": "value"})
+	// Should work with any execution context
+	ec := NewMockExecutionContext(123, "test-idempotency-key")
+	result, err := condition.Evaluate(context.Background(), ec)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)

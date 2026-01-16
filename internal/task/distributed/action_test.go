@@ -299,8 +299,8 @@ func TestActionK8sExecDeployment_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": tt.epoch}
-			err := tt.action.Execute(context.Background(), payload)
+			ec := NewMockExecutionContext(tt.epoch, uuid.New().String())
+			err := tt.action.Execute(context.Background(), ec)
 
 			if tt.expectedError {
 				if err == nil {
@@ -326,8 +326,8 @@ func TestActionK8sExecDeployment_Execute_InvalidEndpoint(t *testing.T) {
 		},
 	}
 
-	payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 1}
-	err := action.Execute(context.Background(), payload)
+	ec := NewMockExecutionContext(1, uuid.New().String())
+	err := action.Execute(context.Background(), ec)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -479,8 +479,8 @@ func TestActionK8sRestartDeployment_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": tt.epoch}
-			err := tt.action.Execute(context.Background(), payload)
+			ec := NewMockExecutionContext(tt.epoch, uuid.New().String())
+			err := tt.action.Execute(context.Background(), ec)
 
 			if tt.expectedError {
 				if err == nil {
@@ -749,8 +749,8 @@ func TestActionK8sWaitDeploymentRollout_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": tt.epoch}
-			err := tt.action.Execute(context.Background(), payload)
+			ec := NewMockExecutionContext(tt.epoch, uuid.New().String())
+			err := tt.action.Execute(context.Background(), ec)
 
 			if tt.expectedError {
 				if err == nil {
@@ -775,8 +775,8 @@ func TestActionK8sWaitDeploymentRollout_Execute_InvalidEndpoint(t *testing.T) {
 		},
 	}
 
-	payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 1}
-	err := action.Execute(context.Background(), payload)
+	ec := NewMockExecutionContext(1, uuid.New().String())
+	err := action.Execute(context.Background(), ec)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -1086,8 +1086,8 @@ func TestActionK8sUpdateConfigMap_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": tt.epoch}
-			err := tt.action.Execute(context.Background(), payload)
+			ec := NewMockExecutionContext(tt.epoch, uuid.New().String())
+			err := tt.action.Execute(context.Background(), ec)
 
 			if tt.expectedError {
 				if err == nil {
@@ -1114,8 +1114,8 @@ func TestActionK8sUpdateConfigMap_Execute_InvalidEndpoint(t *testing.T) {
 		},
 	}
 
-	payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 1}
-	err := action.Execute(context.Background(), payload)
+	ec := NewMockExecutionContext(1, uuid.New().String())
+	err := action.Execute(context.Background(), ec)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")
@@ -1401,8 +1401,8 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 				tt.action.Member = server.URL
 			}
 
-			payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": tt.epoch}
-			err := tt.action.Execute(context.Background(), payload)
+			ec := NewMockExecutionContext(tt.epoch, uuid.New().String())
+			err := tt.action.Execute(context.Background(), ec)
 
 			if tt.expectedError {
 				if err == nil {
@@ -1428,8 +1428,8 @@ func TestActionK8sScaleDeployment_Execute_InvalidEndpoint(t *testing.T) {
 		},
 	}
 
-	payload := map[string]any{"idempotencyId": uuid.New().String(), "epoch": 1}
-	err := action.Execute(context.Background(), payload)
+	ec := NewMockExecutionContext(1, uuid.New().String())
+	err := action.Execute(context.Background(), ec)
 
 	if err == nil {
 		t.Errorf("expected error for invalid endpoint, got none")

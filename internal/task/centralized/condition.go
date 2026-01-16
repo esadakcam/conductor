@@ -9,7 +9,7 @@ import (
 	"github.com/esadakcam/conductor/internal/task"
 )
 
-func (c *ConditionK8sDeploymentReady) Evaluate(ctx context.Context, payload any) (bool, error) {
+func (c *ConditionK8sDeploymentReady) Evaluate(ctx context.Context, ec task.ExecutionContext) (bool, error) {
 	if c.Member == "" {
 		err := fmt.Errorf("member is required")
 		logger.Error("ConditionK8sDeploymentReady: member is required")
@@ -22,11 +22,7 @@ func (c *ConditionK8sDeploymentReady) Evaluate(ctx context.Context, payload any)
 		return false, err
 	}
 
-	k8sClients, err := getK8sClients(payload)
-	if err != nil {
-		logger.Errorf("ConditionK8sDeploymentReady: failed to get k8s clients: %v", err)
-		return false, fmt.Errorf("failed to get k8s clients: %w", err)
-	}
+	k8sClients := ec.GetK8sClients()
 
 	client, ok := k8sClients[c.Member]
 	if !ok {

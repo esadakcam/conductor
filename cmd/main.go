@@ -64,7 +64,8 @@ func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
 
 	tasks := config.Tasks
 
-	outbox := centralizedCluster.NewOutbox(ctx, k8sClients)
+	executionContext := centralizedCluster.NewExecutionContext(k8sClients)
+	outbox := centralizedCluster.NewOutbox(ctx, executionContext)
 	cluster.Conduct(ctx, tasks, outbox)
 }
 
