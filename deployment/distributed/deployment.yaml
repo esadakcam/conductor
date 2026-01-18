@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conductor
+  namespace: conductor
+  labels:
+    app: conductor
+    mode: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: conductor
+      mode: distributed
+  template:
+    metadata:
+      labels:
+        app: conductor
+        mode: distributed
+    spec:
+      serviceAccountName: conductor
+      imagePullSecrets:
+        - name: dockerhub-secret
+      containers:
+        - name: conductor
+          image: esadakcam/private:conductor
+          imagePullPolicy: Always
+          args:
+            - distributed
+            - /config/config.yaml
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: config
+          configMap:
+            name: conductor-config

@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: conductor
+  namespace: conductor
+  labels:
+    app: conductor
+    mode: distributed
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      name: http
+      targetPort: 8080
+      nodePort: 30808
+  selector:
+    app: conductor
+    mode: distributed
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: conductor-headless
+  namespace: conductor
+  labels:
+    app: conductor
+    mode: distributed
+spec:
+  clusterIP: None
+  ports:
+    - port: 8080
+      name: http
+      targetPort: 8080
+  selector:
+    app: conductor
+    mode: distributed

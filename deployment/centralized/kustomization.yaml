@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: conductor
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - dockerhub-secret.yaml
+  - deployment.yaml
+
+commonLabels:
+  app.kubernetes.io/name: conductor
+  app.kubernetes.io/component: orchestrator
+  app.kubernetes.io/part-of: conductor
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: conductor
+    newTag: latest
