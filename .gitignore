@@ -1,3 +1,4 @@
 bin/
 kubeconfigs/
 coverage.*
+dockerhub-secret.yaml
