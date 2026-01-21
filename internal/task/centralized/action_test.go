@@ -1421,3 +1421,789 @@ func TestActionK8sScaleDeployment_Execute(t *testing.T) {
 		}
 	})
 }
+
+// Idempotency Tests
+
+func TestCheckIdempotencyLabel(t *testing.T) {
+	t.Run("returns false when resource has no labels", func(t *testing.T) {
+		resource := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "test",
+				},
+			},
+		}
+		if checkIdempotencyLabel(resource, "test-key") {
+			t.Error("expected false when resource has no labels")
+		}
+	})
+
+	t.Run("returns false when idempotency label is missing", func(t *testing.T) {
+		resource := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "test",
+					"labels": map[string]interface{}{
+						"app": "test-app",
+					},
+				},
+			},
+		}
+		if checkIdempotencyLabel(resource, "test-key") {
+			t.Error("expected false when idempotency label is missing")
+		}
+	})
+
+	t.Run("returns false when idempotency key doesn't match", func(t *testing.T) {
+		resource := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "test",
+					"labels": map[string]interface{}{
+						idempotencyLabelKey: "different-key",
+					},
+				},
+			},
+		}
+		if checkIdempotencyLabel(resource, "test-key") {
+			t.Error("expected false when idempotency key doesn't match")
+		}
+	})
+
+	t.Run("returns true when idempotency key matches", func(t *testing.T) {
+		resource := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "test",
+					"labels": map[string]interface{}{
+						idempotencyLabelKey: "test-key",
+					},
+				},
+			},
+		}
+		if !checkIdempotencyLabel(resource, "test-key") {
+			t.Error("expected true when idempotency key matches")
+		}
+	})
+
+	t.Run("returns false when idempotency key is empty", func(t *testing.T) {
+		resource := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "test",
+					"labels": map[string]interface{}{
+						idempotencyLabelKey: "some-key",
+					},
+				},
+			},
+		}
+		// Empty idempotency key should skip the check
+		if checkIdempotencyLabel(resource, "") {
+			t.Error("expected false when idempotency key is empty")
+		}
+	})
+}
+
+func TestActionK8sScaleDeployment_Idempotency(t *testing.T) {
+	client := setupTestCluster(t)
+	ctx := context.Background()
+	ns := setupTestNamespace(t, client)
+	defer cleanupTestNamespace(t, client, ns)
+
+	t.Run("skips execution when idempotency label exists", func(t *testing.T) {
+		idempotencyKey := "test-idempotency-key-123"
+
+		// Create a deployment with the idempotency label already set
+		deployName := fmt.Sprintf("test-idem-scale-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+					"labels": map[string]interface{}{
+						idempotencyLabelKey: idempotencyKey,
+					},
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "idem-scale-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "idem-scale-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		action := &ActionK8sScaleDeployment{
+			ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  ns,
+				Replicas:   5, // Try to scale to 5
+			},
+		}
+
+		ec := NewMockExecutionContextWithIdempotency(map[string]*k8s.Client{
+			"member1": client,
+		}, idempotencyKey)
+
+		err = action.Execute(ctx, ec)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		// Verify that replicas was NOT changed (skipped due to idempotency)
+		deployment, err := client.Get(ctx, "deployments", ns, deployName)
+		if err != nil {
+			t.Fatalf("Failed to get deployment: %v", err)
+		}
+		replicas, _, _ := unstructured.NestedInt64(deployment.Object, "spec", "replicas")
+		if replicas != 1 {
+			t.Errorf("expected replicas to remain 1 (skipped), got %d", replicas)
+		}
+	})
+
+	t.Run("executes and adds idempotency label when not present", func(t *testing.T) {
+		idempotencyKey := "new-idempotency-key-456"
+
+		deployName := fmt.Sprintf("test-idem-scale-new-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "idem-scale-new-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "idem-scale-new-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Wait for deployment to be ready
+		err = waitForDeploymentReady(t, client, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("Deployment did not become ready: %v", err)
+		}
+
+		action := &ActionK8sScaleDeployment{
+			ActionK8sScaleDeploymentData: task.ActionK8sScaleDeploymentData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  ns,
+				Replicas:   2,
+			},
+		}
+
+		ec := NewMockExecutionContextWithIdempotency(map[string]*k8s.Client{
+			"member1": client,
+		}, idempotencyKey)
+
+		err = action.Execute(ctx, ec)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		// Verify replicas was changed
+		deployment, err := client.Get(ctx, "deployments", ns, deployName)
+		if err != nil {
+			t.Fatalf("Failed to get deployment: %v", err)
+		}
+		replicas, _, _ := unstructured.NestedInt64(deployment.Object, "spec", "replicas")
+		if replicas != 2 {
+			t.Errorf("expected replicas to be 2, got %d", replicas)
+		}
+
+		// Verify idempotency label was added
+		labels := deployment.GetLabels()
+		if labels[idempotencyLabelKey] != idempotencyKey {
+			t.Errorf("expected idempotency label %q, got %q", idempotencyKey, labels[idempotencyLabelKey])
+		}
+	})
+}
+
+func TestActionK8sUpdateConfigMap_Idempotency(t *testing.T) {
+	client := setupTestCluster(t)
+	ctx := context.Background()
+	ns := setupTestNamespace(t, client)
+	defer cleanupTestNamespace(t, client, ns)
+
+	t.Run("skips execution when idempotency label exists", func(t *testing.T) {
+		idempotencyKey := "cm-idem-key-123"
+
+		cmName := fmt.Sprintf("test-idem-cm-%d", time.Now().UnixNano())
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]interface{}{
+					"name":      cmName,
+					"namespace": ns,
+					"labels": map[string]interface{}{
+						idempotencyLabelKey: idempotencyKey,
+					},
+				},
+				"data": map[string]interface{}{
+					"key1": "original-value",
+				},
+			},
+		}
+		_, err := client.Create(ctx, "configmaps", ns, cmObj)
+		if err != nil {
+			t.Fatalf("Failed to create configmap: %v", err)
+		}
+		defer client.Delete(ctx, "configmaps", ns, cmName)
+
+		action := &ActionK8sUpdateConfigMap{
+			ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
+				Member:    "member1",
+				ConfigMap: cmName,
+				Namespace: ns,
+				Key:       "key1",
+				Value:     "new-value",
+			},
+		}
+
+		ec := NewMockExecutionContextWithIdempotency(map[string]*k8s.Client{
+			"member1": client,
+		}, idempotencyKey)
+
+		err = action.Execute(ctx, ec)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		// Verify value was NOT changed (skipped)
+		cm, err := client.Get(ctx, "configmaps", ns, cmName)
+		if err != nil {
+			t.Fatalf("Failed to get configmap: %v", err)
+		}
+		data, _, _ := unstructured.NestedStringMap(cm.Object, "data")
+		if data["key1"] != "original-value" {
+			t.Errorf("expected value to remain 'original-value' (skipped), got %s", data["key1"])
+		}
+	})
+
+	t.Run("executes and adds idempotency label when not present", func(t *testing.T) {
+		idempotencyKey := "cm-new-idem-key-456"
+
+		cmName := fmt.Sprintf("test-idem-cm-new-%d", time.Now().UnixNano())
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]interface{}{
+					"name":      cmName,
+					"namespace": ns,
+				},
+				"data": map[string]interface{}{
+					"key1": "original-value",
+				},
+			},
+		}
+		_, err := client.Create(ctx, "configmaps", ns, cmObj)
+		if err != nil {
+			t.Fatalf("Failed to create configmap: %v", err)
+		}
+		defer client.Delete(ctx, "configmaps", ns, cmName)
+
+		action := &ActionK8sUpdateConfigMap{
+			ActionK8sUpdateConfigMapData: task.ActionK8sUpdateConfigMapData{
+				Member:    "member1",
+				ConfigMap: cmName,
+				Namespace: ns,
+				Key:       "key1",
+				Value:     "new-value",
+			},
+		}
+
+		ec := NewMockExecutionContextWithIdempotency(map[string]*k8s.Client{
+			"member1": client,
+		}, idempotencyKey)
+
+		err = action.Execute(ctx, ec)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		// Verify value was changed
+		cm, err := client.Get(ctx, "configmaps", ns, cmName)
+		if err != nil {
+			t.Fatalf("Failed to get configmap: %v", err)
+		}
+		data, _, _ := unstructured.NestedStringMap(cm.Object, "data")
+		if data["key1"] != "new-value" {
+			t.Errorf("expected value to be 'new-value', got %s", data["key1"])
+		}
+
+		// Verify idempotency label was added
+		labels := cm.GetLabels()
+		if labels[idempotencyLabelKey] != idempotencyKey {
+			t.Errorf("expected idempotency label %q, got %q", idempotencyKey, labels[idempotencyLabelKey])
+		}
+	})
+}
+
+func TestActionK8sRestartDeployment_Idempotency(t *testing.T) {
+	client := setupTestCluster(t)
+	ctx := context.Background()
+	ns := setupTestNamespace(t, client)
+	defer cleanupTestNamespace(t, client, ns)
+
+	t.Run("skips execution when idempotency label exists", func(t *testing.T) {
+		idempotencyKey := "restart-idem-key-123"
+
+		deployName := fmt.Sprintf("test-idem-restart-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+					"labels": map[string]interface{}{
+						idempotencyLabelKey: idempotencyKey,
+					},
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "idem-restart-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "idem-restart-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		action := &ActionK8sRestartDeployment{
+			ActionK8sRestartDeploymentData: task.ActionK8sRestartDeploymentData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  ns,
+			},
+		}
+
+		ec := NewMockExecutionContextWithIdempotency(map[string]*k8s.Client{
+			"member1": client,
+		}, idempotencyKey)
+
+		err = action.Execute(ctx, ec)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		// Verify restartedAt annotation was NOT added (skipped)
+		deployment, err := client.Get(ctx, "deployments", ns, deployName)
+		if err != nil {
+			t.Fatalf("Failed to get deployment: %v", err)
+		}
+		annotations, _, _ := unstructured.NestedStringMap(deployment.Object, "spec", "template", "metadata", "annotations")
+		if annotations["kubectl.kubernetes.io/restartedAt"] != "" {
+			t.Error("expected no restartedAt annotation (skipped)")
+		}
+	})
+
+	t.Run("executes and adds idempotency label when not present", func(t *testing.T) {
+		idempotencyKey := "restart-new-idem-key-456"
+
+		deployName := fmt.Sprintf("test-idem-restart-new-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "idem-restart-new-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "idem-restart-new-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Wait for deployment to be ready
+		err = waitForDeploymentReady(t, client, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("Deployment did not become ready: %v", err)
+		}
+
+		action := &ActionK8sRestartDeployment{
+			ActionK8sRestartDeploymentData: task.ActionK8sRestartDeploymentData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  ns,
+			},
+		}
+
+		ec := NewMockExecutionContextWithIdempotency(map[string]*k8s.Client{
+			"member1": client,
+		}, idempotencyKey)
+
+		err = action.Execute(ctx, ec)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		// Verify restartedAt annotation was added
+		deployment, err := client.Get(ctx, "deployments", ns, deployName)
+		if err != nil {
+			t.Fatalf("Failed to get deployment: %v", err)
+		}
+		annotations, _, _ := unstructured.NestedStringMap(deployment.Object, "spec", "template", "metadata", "annotations")
+		if annotations["kubectl.kubernetes.io/restartedAt"] == "" {
+			t.Error("expected restartedAt annotation to be set")
+		}
+
+		// Verify idempotency label was added
+		labels := deployment.GetLabels()
+		if labels[idempotencyLabelKey] != idempotencyKey {
+			t.Errorf("expected idempotency label %q, got %q", idempotencyKey, labels[idempotencyLabelKey])
+		}
+	})
+}
+
+func TestActionK8sExecDeployment_Idempotency(t *testing.T) {
+	client := setupTestCluster(t)
+	ctx := context.Background()
+	ns := setupTestNamespace(t, client)
+	defer cleanupTestNamespace(t, client, ns)
+
+	t.Run("skips execution when idempotency label exists", func(t *testing.T) {
+		idempotencyKey := "exec-idem-key-123"
+
+		deployName := fmt.Sprintf("test-idem-exec-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+					"labels": map[string]interface{}{
+						idempotencyLabelKey: idempotencyKey,
+					},
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "idem-exec-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "idem-exec-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Wait for deployment to be ready
+		err = waitForDeploymentReady(t, client, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("Deployment did not become ready: %v", err)
+		}
+
+		action := &ActionK8sExecDeployment{
+			ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  ns,
+				Command:    []string{"touch", "/tmp/test-file"},
+			},
+		}
+
+		ec := NewMockExecutionContextWithIdempotency(map[string]*k8s.Client{
+			"member1": client,
+		}, idempotencyKey)
+
+		err = action.Execute(ctx, ec)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		// The exec should have been skipped. We can't easily verify the file wasn't created
+		// but the test passes if no error occurred and execution was idempotent
+	})
+
+	t.Run("executes and adds idempotency label when not present", func(t *testing.T) {
+		idempotencyKey := "exec-new-idem-key-456"
+
+		deployName := fmt.Sprintf("test-idem-exec-new-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "idem-exec-new-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "idem-exec-new-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":    "busybox",
+									"image":   "busybox:latest",
+									"command": []interface{}{"sleep", "3600"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := client.Create(ctx, "deployments", ns, deployObj)
+		if err != nil {
+			t.Fatalf("Failed to create deployment: %v", err)
+		}
+		defer client.Delete(ctx, "deployments", ns, deployName)
+
+		// Wait for deployment to be ready
+		err = waitForDeploymentReady(t, client, ns, deployName, 3*time.Minute)
+		if err != nil {
+			t.Fatalf("Deployment did not become ready: %v", err)
+		}
+
+		action := &ActionK8sExecDeployment{
+			ActionK8sExecDeploymentData: task.ActionK8sExecDeploymentData{
+				Member:     "member1",
+				Deployment: deployName,
+				Namespace:  ns,
+				Command:    []string{"echo", "hello"},
+			},
+		}
+
+		ec := NewMockExecutionContextWithIdempotency(map[string]*k8s.Client{
+			"member1": client,
+		}, idempotencyKey)
+
+		err = action.Execute(ctx, ec)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		// Verify idempotency label was added after exec
+		deployment, err := client.Get(ctx, "deployments", ns, deployName)
+		if err != nil {
+			t.Fatalf("Failed to get deployment: %v", err)
+		}
+		labels := deployment.GetLabels()
+		if labels[idempotencyLabelKey] != idempotencyKey {
+			t.Errorf("expected idempotency label %q, got %q", idempotencyKey, labels[idempotencyLabelKey])
+		}
+	})
+}
+
+func TestActionK8sWaitDeploymentRollout_NoIdempotency(t *testing.T) {
+	// Wait operation doesn't need idempotency - it's read-only
+	// This test verifies it works with or without idempotency key
+	client := setupTestCluster(t)
+	ctx := context.Background()
+	ns := setupTestNamespace(t, client)
+	defer cleanupTestNamespace(t, client, ns)
+
+	deployName := fmt.Sprintf("test-wait-idem-%d", time.Now().UnixNano())
+	deployObj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      deployName,
+				"namespace": ns,
+			},
+			"spec": map[string]interface{}{
+				"replicas": int64(1),
+				"selector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"app": "wait-idem-test",
+					},
+				},
+				"template": map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]interface{}{
+							"app": "wait-idem-test",
+						},
+					},
+					"spec": map[string]interface{}{
+						"containers": []map[string]interface{}{
+							{
+								"name":    "busybox",
+								"image":   "busybox:latest",
+								"command": []interface{}{"sleep", "3600"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := client.Create(ctx, "deployments", ns, deployObj)
+	if err != nil {
+		t.Fatalf("Failed to create deployment: %v", err)
+	}
+	defer client.Delete(ctx, "deployments", ns, deployName)
+
+	action := &ActionK8sWaitDeploymentRollout{
+		ActionK8sWaitDeploymentRolloutData: task.ActionK8sWaitDeploymentRolloutData{
+			Member:     "member1",
+			Deployment: deployName,
+			Namespace:  ns,
+			Timeout:    3 * time.Minute,
+		},
+	}
+
+	// Test with idempotency key - should still work (no idempotency check for wait)
+	ec := NewMockExecutionContextWithIdempotency(map[string]*k8s.Client{
+		"member1": client,
+	}, "some-idempotency-key")
+
+	err = action.Execute(ctx, ec)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Deployment should not have idempotency label (wait doesn't add labels)
+	deployment, err := client.Get(ctx, "deployments", ns, deployName)
+	if err != nil {
+		t.Fatalf("Failed to get deployment: %v", err)
+	}
+	labels := deployment.GetLabels()
+	if labels != nil && labels[idempotencyLabelKey] != "" {
+		t.Error("expected no idempotency label for wait action")
+	}
+}

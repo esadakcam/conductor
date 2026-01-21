@@ -1,8 +1,106 @@
+// Package k8s provides a Kubernetes client wrapper for interacting with Kubernetes resources.
+//
+// The package supports both in-cluster and out-of-cluster configurations, using the dynamic
+// client for flexible resource management and the typed clientset for pod operations.
+//
+// # Client Creation
+//
+// Create a client with a specific kubeconfig path:
+//
+//	client, err := k8s.NewClient("/path/to/kubeconfig")
+//
+// Create a client using default configuration (in-cluster or ~/.kube/config):
+//
+//	client, err := k8s.NewClient("")
+//
+// # Supported Resources
+//
+// The client supports the following Kubernetes resource types:
+//   - pods (v1)
+//   - services (v1)
+//   - configmaps (v1)
+//   - secrets (v1)
+//   - namespaces (v1)
+//   - deployments (apps/v1)
+//
+// # CRUD Operations
+//
+// Basic CRUD operations are available for all supported resources:
+//
+//	// Get a resource
+//	cm, err := client.Get(ctx, "configmaps", "namespace", "name")
+//
+//	// List resources
+//	list, err := client.List(ctx, "pods", "namespace")
+//
+//	// Create a resource
+//	created, err := client.Create(ctx, "configmaps", "namespace", obj)
+//
+//	// Update a resource
+//	updated, err := client.Update(ctx, "configmaps", "namespace", obj)
+//
+//	// Delete a resource
+//	err := client.Delete(ctx, "configmaps", "namespace", "name")
+//
+// # Server-Side Apply
+//
+// The Apply method uses Kubernetes Server-Side Apply (SSA) for declarative resource management.
+// SSA allows multiple controllers to safely manage different fields of the same resource:
+//
+//	obj := &unstructured.Unstructured{
+//		Object: map[string]interface{}{
+//			"apiVersion": "v1",
+//			"kind":       "ConfigMap",
+//			"metadata": map[string]interface{}{
+//				"name":      "my-config",
+//				"namespace": "default",
+//			},
+//			"data": map[string]interface{}{
+//				"key": "value",
+//			},
+//		},
+//	}
+//
+//	// Apply with a field manager name
+//	applied, err := client.Apply(ctx, "configmaps", "default", obj, "my-controller", false)
+//
+//	// Force apply to resolve conflicts
+//	applied, err := client.Apply(ctx, "configmaps", "default", obj, "my-controller", true)
+//
+// # Patching Resources
+//
+// The Patch method supports various patch types:
+//
+//	// JSON Merge Patch
+//	patch := []byte(`{"data":{"newKey":"newValue"}}`)
+//	patched, err := client.Patch(ctx, "configmaps", "ns", "name", types.MergePatchType, patch)
+//
+// # Pod Execution
+//
+// Execute commands in containers:
+//
+//	// Execute in a specific pod
+//	result, err := client.Exec(ctx, "namespace", "pod-name", "container", []string{"ls", "-la"})
+//	fmt.Println(result.Stdout)
+//	fmt.Println(result.Stderr)
+//
+//	// Execute on all pods of a deployment
+//	results, err := client.ExecDeployment(ctx, "namespace", "deployment-name", "", []string{"echo", "hello"})
+//	for _, r := range results {
+//		fmt.Printf("Pod %s: %s\n", r.PodName, r.Result.Stdout)
+//	}
+//
+// # Deployment Rollout
+//
+// Wait for a deployment rollout to complete:
+//
+//	err := client.WaitForDeploymentRollout(ctx, "namespace", "deployment-name", 5*time.Minute)
 package k8s
 
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -164,6 +262,45 @@ func (c *Client) Patch(ctx context.Context, resource, namespace, name string, pt
 	}
 
 	return c.client.Resource(gvr).Namespace(namespace).Patch(ctx, name, pt, data, metav1.PatchOptions{})
+}
+
+// Apply applies an object using server-side apply (SSA).
+// The object must have apiVersion and kind set.
+// fieldManager is the name of the actor applying the configuration.
+// If force is true, it will force conflicts to be resolved in favor of this apply.
+func (c *Client) Apply(ctx context.Context, resource, namespace string, obj *unstructured.Unstructured, fieldManager string, force bool) (*unstructured.Unstructured, error) {
+	gvr, err := c.getGVR(resource)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate that apiVersion and kind are set
+	if obj.GetAPIVersion() == "" {
+		return nil, fmt.Errorf("apiVersion must be set for server-side apply")
+	}
+	if obj.GetKind() == "" {
+		return nil, fmt.Errorf("kind must be set for server-side apply")
+	}
+
+	// Serialize the object to JSON for the patch
+	data, err := json.Marshal(obj.Object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal object for server-side apply: %w", err)
+	}
+
+	name := obj.GetName()
+	if name == "" {
+		return nil, fmt.Errorf("name must be set for server-side apply")
+	}
+
+	patchOpts := metav1.PatchOptions{
+		FieldManager: fieldManager,
+	}
+	if force {
+		patchOpts.Force = &force
+	}
+
+	return c.client.Resource(gvr).Namespace(namespace).Patch(ctx, name, types.ApplyPatchType, data, patchOpts)
 }
 
 // Delete deletes an object

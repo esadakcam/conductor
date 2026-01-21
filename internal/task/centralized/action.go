@@ -15,15 +15,38 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+const idempotencyLabelKey = "conductor.io/idempotency-key"
+
+// checkIdempotencyLabel checks if the resource already has the idempotency label with the given key.
+// Returns true if the action should be skipped (already executed).
+func checkIdempotencyLabel(resource *unstructured.Unstructured, idempotencyKey string) bool {
+	if idempotencyKey == "" {
+		return false
+	}
+	labels := resource.GetLabels()
+	if labels == nil {
+		return false
+	}
+	existingKey, ok := labels[idempotencyLabelKey]
+	return ok && existingKey == idempotencyKey
+}
+
 func (a *ActionConfigValueSum) Execute(ctx context.Context, ec task.ExecutionContext) error {
 	k8sClients := ec.GetK8sClients()
+	idempotencyKey := ec.GetIdempotencyKey()
 
 	namespace := a.Namespace
 	if namespace == "" {
 		namespace = "default"
 	}
 
-	curSumMap := a.fetchCurrentValues(ctx, k8sClients, namespace)
+	curSumMap, configMaps := a.fetchCurrentValuesWithIdempotencyCheck(ctx, k8sClients, namespace, idempotencyKey)
+
+	// If all members already have the idempotency key, skip
+	if len(curSumMap) == 0 && len(configMaps) > 0 {
+		logger.Info("ActionConfigValueSum: all members already processed with this idempotency key, skipping")
+		return nil
+	}
 
 	curSum := 0
 	for _, value := range curSumMap {
@@ -35,12 +58,13 @@ func (a *ActionConfigValueSum) Execute(ctx context.Context, ec task.ExecutionCon
 		return nil
 	}
 
-	return a.distributeAndApplyChanges(ctx, k8sClients, curSumMap, namespace)
+	return a.distributeAndApplyChanges(ctx, k8sClients, curSumMap, namespace, idempotencyKey)
 }
 
-func (a *ActionConfigValueSum) fetchCurrentValues(ctx context.Context, k8sClients map[string]*k8s.Client, namespace string) map[string]int {
+func (a *ActionConfigValueSum) fetchCurrentValuesWithIdempotencyCheck(ctx context.Context, k8sClients map[string]*k8s.Client, namespace string, idempotencyKey string) (map[string]int, map[string]*unstructured.Unstructured) {
 	var mutex sync.Mutex
 	var curSumMap = make(map[string]int)
+	var configMaps = make(map[string]*unstructured.Unstructured)
 	var wg sync.WaitGroup
 
 	for _, member := range a.Members {
@@ -56,6 +80,16 @@ func (a *ActionConfigValueSum) fetchCurrentValues(ctx context.Context, k8sClient
 			configMap, err := client.Get(ctx, "configmaps", namespace, a.ConfigMapName)
 			if err != nil {
 				logger.Errorf("ActionConfigValueSum: failed to get configmap %s/%s from %s: %v", namespace, a.ConfigMapName, member, err)
+				return
+			}
+
+			mutex.Lock()
+			configMaps[member] = configMap
+			mutex.Unlock()
+
+			// Check idempotency - if already processed, skip this member
+			if checkIdempotencyLabel(configMap, idempotencyKey) {
+				logger.Infof("ActionConfigValueSum: configmap %s/%s on %s already has idempotency key, skipping", namespace, a.ConfigMapName, member)
 				return
 			}
 
@@ -83,10 +117,10 @@ func (a *ActionConfigValueSum) fetchCurrentValues(ctx context.Context, k8sClient
 		}(member)
 	}
 	wg.Wait()
-	return curSumMap
+	return curSumMap, configMaps
 }
 
-func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, k8sClients map[string]*k8s.Client, curSumMap map[string]int, namespace string) error {
+func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, k8sClients map[string]*k8s.Client, curSumMap map[string]int, namespace string, idempotencyKey string) error {
 	if len(curSumMap) == 0 {
 		logger.Warnf("no members available to patch %s/%s", a.ConfigMapName, a.Key)
 		return nil
@@ -111,10 +145,18 @@ func (a *ActionConfigValueSum) distributeAndApplyChanges(ctx context.Context, k8
 			return fmt.Errorf("no k8s client for member %s", member)
 		}
 
+		// Atomic patch: data change + idempotency label in single operation
 		patchData := map[string]interface{}{
 			"data": map[string]string{
 				a.Key: strconv.Itoa(newValue),
 			},
+		}
+		if idempotencyKey != "" {
+			patchData["metadata"] = map[string]interface{}{
+				"labels": map[string]string{
+					idempotencyLabelKey: idempotencyKey,
+				},
+			}
 		}
 
 		patchBytes, err := json.Marshal(patchData)
@@ -140,6 +182,7 @@ func (a *ActionConfigValueSum) GetType() task.ActionType {
 
 func (a *ActionK8sExecDeployment) Execute(ctx context.Context, ec task.ExecutionContext) error {
 	k8sClients := ec.GetK8sClients()
+	idempotencyKey := ec.GetIdempotencyKey()
 
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
@@ -171,6 +214,19 @@ func (a *ActionK8sExecDeployment) Execute(ctx context.Context, ec task.Execution
 		namespace = "default"
 	}
 
+	// Check idempotency on deployment
+	if idempotencyKey != "" {
+		deployment, err := client.Get(ctx, "deployments", namespace, a.Deployment)
+		if err != nil {
+			logger.Errorf("ActionK8sExecDeployment: failed to get deployment %s/%s: %v", namespace, a.Deployment, err)
+			return fmt.Errorf("failed to get deployment: %w", err)
+		}
+		if checkIdempotencyLabel(deployment, idempotencyKey) {
+			logger.Infof("ActionK8sExecDeployment: deployment %s/%s already has idempotency key, skipping exec", namespace, a.Deployment)
+			return nil
+		}
+	}
+
 	logger.Infof("Executing command on deployment %s/%s via member %s: %v", namespace, a.Deployment, a.Member, a.Command)
 
 	results, err := client.ExecDeployment(ctx, namespace, a.Deployment, a.Container, a.Command)
@@ -188,6 +244,27 @@ func (a *ActionK8sExecDeployment) Execute(ctx context.Context, ec task.Execution
 		logger.Infof("ActionK8sExecDeployment: exec succeeded on pod %s, stdout: %s", result.PodName, result.Result.Stdout)
 	}
 
+	// Add idempotency label to deployment after successful exec (non-atomic, exec cannot be combined with patch)
+	if idempotencyKey != "" {
+		patchData := map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"labels": map[string]string{
+					idempotencyLabelKey: idempotencyKey,
+				},
+			},
+		}
+		patchBytes, err := json.Marshal(patchData)
+		if err != nil {
+			logger.Errorf("ActionK8sExecDeployment: failed to marshal patch data: %v", err)
+			return fmt.Errorf("failed to marshal patch data: %w", err)
+		}
+		_, err = client.Patch(ctx, "deployments", namespace, a.Deployment, types.MergePatchType, patchBytes)
+		if err != nil {
+			logger.Errorf("ActionK8sExecDeployment: failed to add idempotency label to deployment %s/%s: %v", namespace, a.Deployment, err)
+			return fmt.Errorf("failed to add idempotency label: %w", err)
+		}
+	}
+
 	logger.Infof("ActionK8sExecDeployment: successfully executed command on deployment %s/%s", namespace, a.Deployment)
 	return nil
 }
@@ -198,6 +275,7 @@ func (a *ActionK8sExecDeployment) GetType() task.ActionType {
 
 func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, ec task.ExecutionContext) error {
 	k8sClients := ec.GetK8sClients()
+	idempotencyKey := ec.GetIdempotencyKey()
 
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
@@ -223,6 +301,20 @@ func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, ec task.Execut
 		namespace = "default"
 	}
 
+	// Check idempotency
+	if idempotencyKey != "" {
+		deployment, err := client.Get(ctx, "deployments", namespace, a.Deployment)
+		if err != nil {
+			logger.Errorf("ActionK8sRestartDeployment: failed to get deployment %s/%s: %v", namespace, a.Deployment, err)
+			return fmt.Errorf("failed to get deployment: %w", err)
+		}
+		if checkIdempotencyLabel(deployment, idempotencyKey) {
+			logger.Infof("ActionK8sRestartDeployment: deployment %s/%s already has idempotency key, skipping restart", namespace, a.Deployment)
+			return nil
+		}
+	}
+
+	// Atomic patch: restartedAt annotation + idempotency label in single operation
 	patchData := map[string]interface{}{
 		"spec": map[string]interface{}{
 			"template": map[string]interface{}{
@@ -233,6 +325,13 @@ func (a *ActionK8sRestartDeployment) Execute(ctx context.Context, ec task.Execut
 				},
 			},
 		},
+	}
+	if idempotencyKey != "" {
+		patchData["metadata"] = map[string]interface{}{
+			"labels": map[string]string{
+				idempotencyLabelKey: idempotencyKey,
+			},
+		}
 	}
 
 	patchBytes, err := json.Marshal(patchData)
@@ -257,6 +356,7 @@ func (a *ActionK8sRestartDeployment) GetType() task.ActionType {
 
 func (a *ActionK8sWaitDeploymentRollout) Execute(ctx context.Context, ec task.ExecutionContext) error {
 	k8sClients := ec.GetK8sClients()
+	// Note: No idempotency check needed for wait/polling operations - they are read-only
 
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
@@ -305,6 +405,7 @@ func (a *ActionK8sWaitDeploymentRollout) GetType() task.ActionType {
 
 func (a *ActionK8sUpdateConfigMap) Execute(ctx context.Context, ec task.ExecutionContext) error {
 	k8sClients := ec.GetK8sClients()
+	idempotencyKey := ec.GetIdempotencyKey()
 
 	if a.ConfigMap == "" {
 		err := fmt.Errorf("config_map name is required")
@@ -336,12 +437,33 @@ func (a *ActionK8sUpdateConfigMap) Execute(ctx context.Context, ec task.Executio
 		namespace = "default"
 	}
 
+	// Check idempotency
+	if idempotencyKey != "" {
+		configMap, err := client.Get(ctx, "configmaps", namespace, a.ConfigMap)
+		if err != nil {
+			logger.Errorf("ActionK8sUpdateConfigMap: failed to get configmap %s/%s: %v", namespace, a.ConfigMap, err)
+			return fmt.Errorf("failed to get configmap: %w", err)
+		}
+		if checkIdempotencyLabel(configMap, idempotencyKey) {
+			logger.Infof("ActionK8sUpdateConfigMap: configmap %s/%s already has idempotency key, skipping update", namespace, a.ConfigMap)
+			return nil
+		}
+	}
+
 	logger.Infof("Updating ConfigMap %s/%s key %s via member %s", namespace, a.ConfigMap, a.Key, a.Member)
 
+	// Atomic patch: data change + idempotency label in single operation
 	patchData := map[string]interface{}{
 		"data": map[string]string{
 			a.Key: a.Value,
 		},
+	}
+	if idempotencyKey != "" {
+		patchData["metadata"] = map[string]interface{}{
+			"labels": map[string]string{
+				idempotencyLabelKey: idempotencyKey,
+			},
+		}
 	}
 
 	patchBytes, err := json.Marshal(patchData)
@@ -366,6 +488,7 @@ func (a *ActionK8sUpdateConfigMap) GetType() task.ActionType {
 
 func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, ec task.ExecutionContext) error {
 	k8sClients := ec.GetK8sClients()
+	idempotencyKey := ec.GetIdempotencyKey()
 
 	if a.Deployment == "" {
 		err := fmt.Errorf("deployment name is required")
@@ -391,12 +514,33 @@ func (a *ActionK8sScaleDeployment) Execute(ctx context.Context, ec task.Executio
 		namespace = "default"
 	}
 
+	// Check idempotency
+	if idempotencyKey != "" {
+		deployment, err := client.Get(ctx, "deployments", namespace, a.Deployment)
+		if err != nil {
+			logger.Errorf("ActionK8sScaleDeployment: failed to get deployment %s/%s: %v", namespace, a.Deployment, err)
+			return fmt.Errorf("failed to get deployment: %w", err)
+		}
+		if checkIdempotencyLabel(deployment, idempotencyKey) {
+			logger.Infof("ActionK8sScaleDeployment: deployment %s/%s already has idempotency key, skipping scale", namespace, a.Deployment)
+			return nil
+		}
+	}
+
 	logger.Infof("Scaling deployment %s/%s to %d replicas via member %s", namespace, a.Deployment, a.Replicas, a.Member)
 
+	// Atomic patch: replicas change + idempotency label in single operation
 	patchData := map[string]interface{}{
 		"spec": map[string]interface{}{
 			"replicas": a.Replicas,
 		},
+	}
+	if idempotencyKey != "" {
+		patchData["metadata"] = map[string]interface{}{
+			"labels": map[string]string{
+				idempotencyLabelKey: idempotencyKey,
+			},
+		}
 	}
 
 	patchBytes, err := json.Marshal(patchData)

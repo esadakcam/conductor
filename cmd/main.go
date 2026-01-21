@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/esadakcam/conductor/internal/cluster"
 	centralizedCluster "github.com/esadakcam/conductor/internal/cluster/centralized"
@@ -52,6 +53,16 @@ func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
 		logger.Fatalf("Failed to load config: %v", err)
 	}
 
+	// Initialize etcd client for idempotency tracking
+	etcdClient, err := clientv3.New(clientv3.Config{
+		Endpoints:   config.EtcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		logger.Fatalf("Failed to create etcd client: %v", err)
+	}
+	defer etcdClient.Close()
+
 	k8sClients := make(map[string]*k8s.Client)
 	for _, kubeconfigLocation := range config.KubeconfigLocations {
 		client, err := k8s.NewClient(kubeconfigLocation)
@@ -64,8 +75,7 @@ func initCentralizedMode(ctx context.Context, cancel context.CancelFunc) {
 
 	tasks := config.Tasks
 
-	executionContext := centralizedCluster.NewExecutionContext(k8sClients)
-	outbox := centralizedCluster.NewOutbox(ctx, executionContext)
+	outbox := centralizedCluster.NewOutbox(ctx, etcdClient, k8sClients, tasks)
 	cluster.Conduct(ctx, tasks, outbox)
 }
 

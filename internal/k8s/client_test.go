@@ -1400,6 +1400,427 @@ func TestClient_ExecDeployment(t *testing.T) {
 	})
 }
 
+func TestClient_Apply(t *testing.T) {
+	setupTestCluster(t)
+
+	client, err := NewClient(testKubeconfigPath)
+	if err != nil {
+		t.Fatalf("Failed to create K8s client: %v", err)
+	}
+
+	// Verify we're connected to a real cluster
+	verifyClusterConnectivity(t, client)
+
+	ctx := context.Background()
+	ns := setupTestNamespace(t, client)
+	defer cleanupTestNamespace(t, client, ns)
+
+	t.Run("Apply creates new ConfigMap", func(t *testing.T) {
+		cmName := fmt.Sprintf("test-apply-cm-%d", time.Now().UnixNano())
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]interface{}{
+					"name":      cmName,
+					"namespace": ns,
+				},
+				"data": map[string]interface{}{
+					"key1": "value1",
+				},
+			},
+		}
+
+		applied, err := client.Apply(ctx, "configmaps", ns, cmObj, "test-manager", false)
+		if err != nil {
+			t.Fatalf("Apply failed: %v", err)
+		}
+
+		if applied.GetName() != cmName {
+			t.Errorf("Expected name %s, got %s", cmName, applied.GetName())
+		}
+
+		// Verify the ConfigMap was created
+		got, err := client.Get(ctx, "configmaps", ns, cmName)
+		if err != nil {
+			t.Fatalf("Failed to get applied ConfigMap: %v", err)
+		}
+
+		data, found, err := unstructured.NestedMap(got.Object, "data")
+		if err != nil || !found {
+			t.Fatalf("Failed to get data field: %v", err)
+		}
+
+		if data["key1"] != "value1" {
+			t.Errorf("Expected data.key1 to be 'value1', got %v", data["key1"])
+		}
+
+		// Cleanup
+		client.Delete(ctx, "configmaps", ns, cmName)
+	})
+
+	t.Run("Apply updates existing ConfigMap", func(t *testing.T) {
+		cmName := fmt.Sprintf("test-apply-update-%d", time.Now().UnixNano())
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]interface{}{
+					"name":      cmName,
+					"namespace": ns,
+				},
+				"data": map[string]interface{}{
+					"key1": "initial-value",
+				},
+			},
+		}
+
+		// First apply
+		_, err := client.Apply(ctx, "configmaps", ns, cmObj, "test-manager", false)
+		if err != nil {
+			t.Fatalf("Initial apply failed: %v", err)
+		}
+
+		// Update and apply again
+		cmObj.Object["data"] = map[string]interface{}{
+			"key1": "updated-value",
+			"key2": "new-value",
+		}
+
+		applied, err := client.Apply(ctx, "configmaps", ns, cmObj, "test-manager", false)
+		if err != nil {
+			t.Fatalf("Update apply failed: %v", err)
+		}
+
+		data, found, err := unstructured.NestedMap(applied.Object, "data")
+		if err != nil || !found {
+			t.Fatalf("Failed to get data field: %v", err)
+		}
+
+		if data["key1"] != "updated-value" {
+			t.Errorf("Expected data.key1 to be 'updated-value', got %v", data["key1"])
+		}
+
+		if data["key2"] != "new-value" {
+			t.Errorf("Expected data.key2 to be 'new-value', got %v", data["key2"])
+		}
+
+		// Cleanup
+		client.Delete(ctx, "configmaps", ns, cmName)
+	})
+
+	t.Run("Apply Deployment with server-side apply", func(t *testing.T) {
+		deployName := fmt.Sprintf("test-apply-deploy-%d", time.Now().UnixNano())
+		deployObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      deployName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"replicas": int64(1),
+					"selector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"app": "ssa-test",
+						},
+					},
+					"template": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								"app": "ssa-test",
+							},
+						},
+						"spec": map[string]interface{}{
+							"containers": []interface{}{
+								map[string]interface{}{
+									"name":  "busybox",
+									"image": "busybox:latest",
+									"command": []interface{}{
+										"sleep",
+										"3600",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		applied, err := client.Apply(ctx, "deployments", ns, deployObj, "test-manager", false)
+		if err != nil {
+			t.Fatalf("Apply deployment failed: %v", err)
+		}
+
+		if applied.GetName() != deployName {
+			t.Errorf("Expected name %s, got %s", deployName, applied.GetName())
+		}
+
+		// Verify it was created
+		got, err := client.Get(ctx, "deployments", ns, deployName)
+		if err != nil {
+			t.Fatalf("Failed to get applied Deployment: %v", err)
+		}
+
+		replicas, _, _ := unstructured.NestedInt64(got.Object, "spec", "replicas")
+		if replicas != 1 {
+			t.Errorf("Expected replicas to be 1, got %d", replicas)
+		}
+
+		// Cleanup
+		client.Delete(ctx, "deployments", ns, deployName)
+	})
+
+	t.Run("Apply with force resolves conflicts", func(t *testing.T) {
+		cmName := fmt.Sprintf("test-apply-force-%d", time.Now().UnixNano())
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]interface{}{
+					"name":      cmName,
+					"namespace": ns,
+				},
+				"data": map[string]interface{}{
+					"key1": "manager1-value",
+				},
+			},
+		}
+
+		// Apply with manager1
+		_, err := client.Apply(ctx, "configmaps", ns, cmObj, "manager1", false)
+		if err != nil {
+			t.Fatalf("Initial apply with manager1 failed: %v", err)
+		}
+
+		// Apply same field with manager2 without force - should conflict
+		cmObj.Object["data"] = map[string]interface{}{
+			"key1": "manager2-value",
+		}
+
+		_, err = client.Apply(ctx, "configmaps", ns, cmObj, "manager2", false)
+		if err == nil {
+			t.Log("No conflict occurred (may depend on K8s version)")
+		}
+
+		// Apply with force should succeed
+		applied, err := client.Apply(ctx, "configmaps", ns, cmObj, "manager2", true)
+		if err != nil {
+			t.Fatalf("Apply with force failed: %v", err)
+		}
+
+		data, found, err := unstructured.NestedMap(applied.Object, "data")
+		if err != nil || !found {
+			t.Fatalf("Failed to get data field: %v", err)
+		}
+
+		if data["key1"] != "manager2-value" {
+			t.Errorf("Expected data.key1 to be 'manager2-value', got %v", data["key1"])
+		}
+
+		// Cleanup
+		client.Delete(ctx, "configmaps", ns, cmName)
+	})
+
+	t.Run("Apply without apiVersion fails", func(t *testing.T) {
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"kind": "ConfigMap",
+				"metadata": map[string]interface{}{
+					"name":      "test-no-apiversion",
+					"namespace": ns,
+				},
+			},
+		}
+
+		_, err := client.Apply(ctx, "configmaps", ns, cmObj, "test-manager", false)
+		if err == nil {
+			t.Error("Expected error when apiVersion is not set")
+		}
+
+		if !strings.Contains(err.Error(), "apiVersion must be set") {
+			t.Errorf("Expected error about apiVersion, got: %v", err)
+		}
+	})
+
+	t.Run("Apply without kind fails", func(t *testing.T) {
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"metadata": map[string]interface{}{
+					"name":      "test-no-kind",
+					"namespace": ns,
+				},
+			},
+		}
+
+		_, err := client.Apply(ctx, "configmaps", ns, cmObj, "test-manager", false)
+		if err == nil {
+			t.Error("Expected error when kind is not set")
+		}
+
+		if !strings.Contains(err.Error(), "kind must be set") {
+			t.Errorf("Expected error about kind, got: %v", err)
+		}
+	})
+
+	t.Run("Apply without name fails", func(t *testing.T) {
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]interface{}{
+					"namespace": ns,
+				},
+			},
+		}
+
+		_, err := client.Apply(ctx, "configmaps", ns, cmObj, "test-manager", false)
+		if err == nil {
+			t.Error("Expected error when name is not set")
+		}
+
+		if !strings.Contains(err.Error(), "name must be set") {
+			t.Errorf("Expected error about name, got: %v", err)
+		}
+	})
+
+	t.Run("Apply with invalid resource type fails", func(t *testing.T) {
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]interface{}{
+					"name":      "test-invalid-resource",
+					"namespace": ns,
+				},
+			},
+		}
+
+		_, err := client.Apply(ctx, "invalid-resource", ns, cmObj, "test-manager", false)
+		if err == nil {
+			t.Error("Expected error for invalid resource type")
+		}
+	})
+
+	t.Run("Apply Secret", func(t *testing.T) {
+		secretName := fmt.Sprintf("test-apply-secret-%d", time.Now().UnixNano())
+		secretObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "Secret",
+				"metadata": map[string]interface{}{
+					"name":      secretName,
+					"namespace": ns,
+				},
+				"type": "Opaque",
+				"data": map[string]interface{}{
+					"username": "dXNlcm5hbWU=", // base64 "username"
+					"password": "cGFzc3dvcmQ=", // base64 "password"
+				},
+			},
+		}
+
+		applied, err := client.Apply(ctx, "secrets", ns, secretObj, "test-manager", false)
+		if err != nil {
+			t.Fatalf("Apply Secret failed: %v", err)
+		}
+
+		if applied.GetName() != secretName {
+			t.Errorf("Expected name %s, got %s", secretName, applied.GetName())
+		}
+
+		// Cleanup
+		client.Delete(ctx, "secrets", ns, secretName)
+	})
+
+	t.Run("Apply Service", func(t *testing.T) {
+		svcName := fmt.Sprintf("test-apply-svc-%d", time.Now().UnixNano())
+		svcObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "Service",
+				"metadata": map[string]interface{}{
+					"name":      svcName,
+					"namespace": ns,
+				},
+				"spec": map[string]interface{}{
+					"ports": []interface{}{
+						map[string]interface{}{
+							"port":       int64(80),
+							"targetPort": int64(8080),
+						},
+					},
+					"selector": map[string]interface{}{
+						"app": "test",
+					},
+				},
+			},
+		}
+
+		applied, err := client.Apply(ctx, "services", ns, svcObj, "test-manager", false)
+		if err != nil {
+			t.Fatalf("Apply Service failed: %v", err)
+		}
+
+		if applied.GetName() != svcName {
+			t.Errorf("Expected name %s, got %s", svcName, applied.GetName())
+		}
+
+		// Cleanup
+		client.Delete(ctx, "services", ns, svcName)
+	})
+
+	t.Run("Apply idempotency", func(t *testing.T) {
+		cmName := fmt.Sprintf("test-apply-idempotent-%d", time.Now().UnixNano())
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]interface{}{
+					"name":      cmName,
+					"namespace": ns,
+				},
+				"data": map[string]interface{}{
+					"key1": "value1",
+				},
+			},
+		}
+
+		// Apply multiple times with the same content
+		for i := 0; i < 3; i++ {
+			applied, err := client.Apply(ctx, "configmaps", ns, cmObj, "test-manager", false)
+			if err != nil {
+				t.Fatalf("Apply iteration %d failed: %v", i, err)
+			}
+
+			if applied.GetName() != cmName {
+				t.Errorf("Iteration %d: Expected name %s, got %s", i, cmName, applied.GetName())
+			}
+		}
+
+		// Verify final state
+		got, err := client.Get(ctx, "configmaps", ns, cmName)
+		if err != nil {
+			t.Fatalf("Failed to get ConfigMap after multiple applies: %v", err)
+		}
+
+		data, found, err := unstructured.NestedMap(got.Object, "data")
+		if err != nil || !found {
+			t.Fatalf("Failed to get data field: %v", err)
+		}
+
+		if data["key1"] != "value1" {
+			t.Errorf("Expected data.key1 to be 'value1', got %v", data["key1"])
+		}
+
+		// Cleanup
+		client.Delete(ctx, "configmaps", ns, cmName)
+	})
+}
+
 func TestClient_WaitForDeploymentRollout(t *testing.T) {
 	setupTestCluster(t)
 
