@@ -22,6 +22,7 @@ type DistributedConfig struct {
 type CentralizedConfig struct {
 	Tasks               []task.TaskInterface `yaml:"tasks"`
 	KubeconfigLocations []string             `yaml:"kubeconfig_locations"`
+	EtcdEndpoints       []string             `yaml:"db"`
 }
 
 // distributedConfigRaw is used for the first pass of unmarshalling
@@ -36,6 +37,7 @@ type distributedConfigRaw struct {
 type centralizedConfigRaw struct {
 	Tasks               []yaml.Node `yaml:"tasks"`
 	KubeconfigLocations []string    `yaml:"kubeconfig_locations"`
+	EtcdEndpoints       []string    `yaml:"db"`
 }
 
 func LoadDistributedConfig(configPath string) (*DistributedConfig, error) {
@@ -102,6 +104,7 @@ func LoadCentralizedConfig(configPath string) (*CentralizedConfig, error) {
 
 	config := &CentralizedConfig{
 		KubeconfigLocations: rawConfig.KubeconfigLocations,
+		EtcdEndpoints:       rawConfig.EtcdEndpoints,
 	}
 
 	// Unmarshal tasks using the centralized factory
@@ -113,6 +116,11 @@ func LoadCentralizedConfig(configPath string) (*CentralizedConfig, error) {
 			return nil, fmt.Errorf("failed to unmarshal task %d: %w", i, err)
 		}
 		config.Tasks = append(config.Tasks, t)
+	}
+
+	// Default etcd endpoints if not specified
+	if len(config.EtcdEndpoints) == 0 {
+		config.EtcdEndpoints = []string{"http://localhost:2379"}
 	}
 
 	return config, nil

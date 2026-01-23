@@ -1,6 +1,9 @@
 kubeconfig_locations:
   - /Users/esad/Projects/conductor/kubeconfigs/kubeconfig.yml
 
+db:
+  - http://localhost:2379
+
 tasks:
   - name: "Scale down cluster 1 and delegate to cluster 2 at night"
     when:
