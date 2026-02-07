@@ -4,7 +4,7 @@ participant Leader as Leader
 participant DB as etcd
 participant Follower as Follower
 
-    Note over Leader, Follower: 0. Leader Election
+    Note over Leader, Follower: 0. Leader election
 
     Leader->>DB: Campaign for Leadership
     Follower->>DB: Campaign for Leadership
@@ -23,7 +23,7 @@ participant Follower as Follower
     Leader->>DB: TXN: IF epoch=42 THEN PUT /outbox/task-A
     DB-->>Leader: TXN: Success
 
-    Note over Leader, Follower: 2. Execute Step 1 with idempotency
+    Note over Leader, Follower: 2. Execute step 1 with idempotency
 
     Leader->>Follower: POST action (Epoch=42, Idempotency-Id=uuid-1)
     Follower->>DB: Check /idempotency/uuid-1
@@ -42,14 +42,14 @@ participant Follower as Follower
 
     Note over Leader, Follower: · · ·
 
-    Note over Leader, Follower: 4. Leader crashes, New Leader takes over with Epoch=43
+    Note over Leader, Follower: 4. Leader crashes, new leader takes over with Epoch=43
 
     participant NewLeader as New Leader
 
     NewLeader->>DB: Scan /conductor/outbox/* (Recovery Check)
     DB-->>NewLeader: Found: task-B at TaskStep=1
 
-    Note over Leader, Follower: 5. New Leader retries (action already executed by old leader)
+    Note over Leader, Follower: 5. New leader retries (action already executed by old leader)
 
     NewLeader->>Follower: POST action (Epoch=43, Idempotency-Id=uuid-1)
     Follower->>DB: Check /idempotency/uuid-1
@@ -59,7 +59,7 @@ participant Follower as Follower
     NewLeader->>DB: TXN: IF epoch=43 THEN UPDATE TaskStep=2
     DB-->>NewLeader: TXN: Success
 
-    Note over Leader, Follower: 6. Zombie Leader wakes up
+    Note over Leader, Follower: 6. Zombie leader wakes up
 
     Leader->>Follower: POST action (Epoch=42, Idempotency-Id=uuid-2)
     Follower->>DB: Check /idempotency/uuid-2
@@ -69,5 +69,5 @@ participant Follower as Follower
     Follower->>Follower: Verify (42 == 43)? FALSE
     Follower-->>Leader: 409 Conflict / Reject
 
-    Note over Follower: System State Remains Safe
+    Note over Follower: System state remains safe
 ```

@@ -14,25 +14,25 @@ sequenceDiagram
 
     Note over OldLeader, Follower: 1. Leadership acquired by Instance 1
     Note over OldLeader, Follower: 2. Instance 1 conducts tasks
-    Note over OldLeader, Follower: 3. Leader 1 hangs (Network Partition)
+    Note over OldLeader, Follower: 3. Leader 1 hangs (network partition)
 
     DB-->>NewLeader: Election Win!
     NewLeader->>DB: TXN: Increment Epoch to 2
     DB->>NewLeader: TXN: Success
     Note over OldLeader, Follower: 4. Instance 2 conducts tasks
 
-    Note over OldLeader, Follower: 5. Old Leader Wakes up (Still thinks Epoch is 1)
+    Note over OldLeader, Follower: 5. Old leader wakes up (still thinks Epoch is 1)
 
     OldLeader->>Follower: REST: Restart Service X (Payload: Epoch=1)
 
-    Note right of Follower: Critical Safety Check
+    Note right of Follower: Critical safety check
     Follower->>DB: Get Current Epoch
     DB-->>Follower: Current Epoch is 2
 
     Follower->>Follower: Verify (Recv: 1 == Curr: 2)? FALSE
     Follower-->>OldLeader: 403 Forbidden / Reject
 
-    Note over Follower: System State Remains Safe
+    Note over Follower: System state remains safe
 
     OldLeader->>DB: Resign
 

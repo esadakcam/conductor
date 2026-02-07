@@ -35,5 +35,5 @@ sequenceDiagram
     Conductor->>DB: DELETE /outbox/task-A
     DB-->>Conductor: Success
 
-    Note over K8s: System State Remains Safe
+    Note over K8s: System state remains safe
 ```
