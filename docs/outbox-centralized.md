@@ -11,6 +11,11 @@ sequenceDiagram
     Conductor->>K8s: GET resource
     K8s-->>Conductor: Label: uuid-0 exists
     Conductor->>Conductor: Skip (already executed)
+    Conductor->>DB: PUT /outbox/task-X {id: uuid-1, step: 2}
+    DB-->>Conductor: Success
+
+    Note over DB, K8s: Remaining steps executed the same way
+
     Conductor->>DB: DELETE /outbox/task-X
     DB-->>Conductor: Success
 
@@ -29,6 +34,11 @@ sequenceDiagram
     K8s-->>Conductor: No idempotency label
     Conductor->>K8s: PATCH resource {action + label: uuid-1}
     K8s-->>Conductor: 200 OK
+
+    Conductor->>DB: PUT /outbox/task-A {id: uuid-2, step: 1}
+    DB-->>Conductor: Success
+
+    Note over DB, K8s: Steps 1 … N executed the same way
 
     Note over DB, K8s: 5. Task complete, remove from outbox
 

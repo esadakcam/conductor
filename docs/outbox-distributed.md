@@ -12,10 +12,10 @@ participant Follower as Follower
 
     Note over Leader, Follower: 1. Task conditions met, add to outbox
 
-    Leader->>DB: TXN: IF epoch=42 THEN PUT /outbox/task-A
+    Leader->>DB: TXN: IF epoch=42 THEN PUT /outbox/task-A {step: 0, id: uuid-1}
     DB-->>Leader: TXN: Success
 
-    Note over Leader, Follower: 2. Execute step 1 with idempotency
+    Note over Leader, Follower: 2. Execute step 0 with idempotency
 
     Leader->>Follower: POST action (Epoch=42, Idempotency-Id=uuid-1)
     Follower->>DB: Check /idempotency/uuid-1
@@ -26,6 +26,11 @@ participant Follower as Follower
     Follower->>Follower: EXECUTE ACTION
     Follower->>DB: Store /idempotency/uuid-1
     Follower-->>Leader: 200 OK
+
+    Leader->>DB: TXN: IF epoch=42 THEN PUT /outbox/task-A {step: 1, id: uuid-2}
+    DB-->>Leader: TXN: Success
+
+    Note over Leader, Follower: Steps 1 … N executed the same way
 
     Note over Leader, Follower: 3. Task complete, remove from outbox
 
