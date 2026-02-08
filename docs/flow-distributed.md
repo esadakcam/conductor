@@ -56,8 +56,8 @@ participant Follower as Follower
 
     Note over Leader, Follower: 5. New leader retries (action already executed by old leader)
 
-    NewLeader->>Follower: POST action (Epoch=43, Idempotency-Id=uuid-1)
-    Follower->>DB: Check /idempotency/uuid-1
+    NewLeader->>Follower: POST action (Epoch=43, Idempotency-Id=uuid-2)
+    Follower->>DB: Check /idempotency/uuid-2
     DB-->>Follower: Found! (already executed)
     Follower-->>NewLeader: 204 No Content (idempotent - skip safely)
 
@@ -66,8 +66,8 @@ participant Follower as Follower
 
     Note over Leader, Follower: 6. Zombie leader wakes up
 
-    Leader->>Follower: POST action (Epoch=42, Idempotency-Id=uuid-2)
-    Follower->>DB: Check /idempotency/uuid-2
+    Leader->>Follower: POST action (Epoch=42, Idempotency-Id=uuid-4)
+    Follower->>DB: Check /idempotency/uuid-4
     DB-->>Follower: Not found
     Follower->>DB: Get Current Epoch
     DB-->>Follower: Epoch=43
