@@ -52,7 +52,7 @@ participant Follower as Follower
     participant NewLeader as New Leader
 
     NewLeader->>DB: Scan /conductor/outbox/* (Recovery Check)
-    DB-->>NewLeader: Found: task-B at TaskStep=1
+    DB-->>NewLeader: Found: task-B at {step: 1, id: uuid-2}
 
     Note over Leader, Follower: 5. New leader retries (action already executed by old leader)
 
@@ -61,7 +61,7 @@ participant Follower as Follower
     DB-->>Follower: Found! (already executed)
     Follower-->>NewLeader: 204 No Content (idempotent - skip safely)
 
-    NewLeader->>DB: TXN: IF epoch=43 THEN UPDATE TaskStep=2
+    NewLeader->>DB: TXN: IF epoch=43 THEN PUT /outbox/task-B {step: 2, id: uuid-3}
     DB-->>NewLeader: TXN: Success
 
     Note over Leader, Follower: 6. Zombie leader wakes up
