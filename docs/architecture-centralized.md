@@ -4,7 +4,7 @@ flowchart TD
     subgraph Central ["Central Cluster"]
         direction LR
         C_ETCD[("Etcd Database
-        (State & Configuration)")]
+        (State)")]
         C_Agent("Conductor (Central)")
 
         C_ETCD -.- C_Agent
