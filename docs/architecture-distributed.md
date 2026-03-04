@@ -5,7 +5,7 @@ flowchart TD
     (Election & Epoch State)")]
 
     %% 2. The Leader Cluster Scope
-    subgraph Cluster_1 ["Member Cluster 1 (LEADER)"]
+    subgraph Cluster_1 ["Member Cluster 1 (Leader)"]
         direction TB
         L_Agent("Conductor (Leader)")
         L_K8s("Local K8s API/Resources")
@@ -15,7 +15,7 @@ flowchart TD
     end
 
     %% 3. The Follower Cluster Scope
-    subgraph Cluster_2 ["Member Cluster 2 (FOLLOWER)"]
+    subgraph Cluster_2 ["Member Cluster 2 (Follower)"]
         direction TB
         F1_Agent("Conductor (Follower)")
         F1_K8s("Local K8s API/Resources")
@@ -25,7 +25,7 @@ flowchart TD
     end
 
     %% 4. The Second Follower (to show 1-to-many)
-    subgraph Cluster_3 ["Member Cluster 3 (FOLLOWER)"]
+    subgraph Cluster_3 ["Member Cluster 3 (Follower)"]
         direction TB
         F2_Agent("Conductor (Follower)")
         F2_K8s("Local K8s API/Resources")
