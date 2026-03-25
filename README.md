@@ -1,114 +1,19 @@
 # Conductor
 
-A distributed Kubernetes cluster orchestration system that automates cross-cluster operations with guaranteed exactly-once execution semantics.
+Automates operations across multiple Kubernetes clusters based on declarative when/then rules. You define conditions to watch (HTTP endpoints, Prometheus metrics, deployment readiness) and actions to take when they're met (scale deployments, update ConfigMaps, exec into pods, etc.).
 
-## Overview
+Built for scenarios like migrating 5G core workloads between clusters based on load, but works for any multi-cluster orchestration need.
 
-Conductor is designed to manage and automate operations across multiple Kubernetes clusters. It supports two deployment modes:
+## How it works
 
-- **Centralized**: Single controller managing all member clusters
-- **Distributed**: Leader-follower architecture with leader election and fault tolerance
-
-Key features include:
-- **Leader election** via etcd for distributed coordination
-- **Idempotent execution** to ensure safe retries
-- **Zombie leader prevention** using epoch-based fencing
-- **Recovery from failures** via outbox pattern
-- **Flexible condition-based triggers** (HTTP endpoints, Prometheus metrics, Kubernetes resources)
-- **Diverse action types** (Kubernetes operations, HTTP calls, delays)
-
-## Architecture
-
-### Centralized Mode
-
-A single Conductor instance running in a central cluster that:
-- Directly manages all member clusters via their Kubernetes APIs
-- Uses etcd for idempotency tracking and state management
-- Simple deployment with a single point of control
-
-![Centralized Architecture](docs/architecture-centralized.md)
-
-### Distributed Mode
-
-Multiple Conductor instances deployed across member clusters with:
-- **Leader election**: One leader coordinates operations across all clusters
-- **Epoch-based fencing**: Prevents zombie leaders from executing stale commands
-- **Outbox pattern**: Reliable task execution with crash recovery
-- **Leader-to-follower communication**: REST API for distributed task execution
-
-![Distributed Architecture](docs/architecture-distributed.md)
-
-## Quick Start
-
-### Prerequisites
-
-- Go 1.25.2 or later
-- Docker and docker-compose (for local etcd cluster)
-- Access to Kubernetes clusters (or kind clusters for testing)
-
-### Building
-
-```bash
-# Build for your platform
-make build
-
-# Build for Linux amd64
-make build-amd64
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-make test
-
-# Run tests with HTML coverage
-make test-coverage
-```
-
-### Running the Application
-
-#### Centralized Mode
-
-```bash
-# Start etcd cluster for local development
-make docker-up
-
-# Run in centralized mode
-./bin/conductor centralized config/config.centralized.yaml
-```
-
-#### Distributed Mode
-
-```bash
-# Start etcd cluster for local development
-make docker-up
-
-# Run multiple instances (one per cluster)
-./bin/conductor distributed config/config.distributed.yaml
-```
-
-## Configuration
-
-### Centralized Configuration
+Tasks are YAML-defined pairs of conditions and actions:
 
 ```yaml
-kubeconfig_locations:
-  - /path/to/kubeconfig1.yml
-  - /path/to/kubeconfig2.yml
-
-db:
-  - http://localhost:2379
-
 tasks:
-  - name: "Scale down cluster 1 and delegate to cluster 2"
+  - name: "Migrate workload to cluster 2"
     when:
-      - type: "endpoint_value"
-        endpoint: "http://localhost:8000"
-        value: 1
-        operator: eq
       - type: "prometheus_metric"
-        endpoint: "http://localhost:30092/metrics"
+        endpoint: "http://cluster1:30092/metrics"
         metric_name: "ues_active"
         operator: "lt"
         value: 10
@@ -118,151 +23,131 @@ tasks:
         deployment: "amf"
         namespace: "open5gs"
         replicas: 0
+      - type: "k8s_scale_deployment"
+        member: "https://cluster2:6443"
+        deployment: "amf"
+        namespace: "open5gs"
+        replicas: 1
 ```
 
-### Distributed Configuration
+Conductor polls conditions every 15 seconds. When all conditions for a task are met, it runs the actions in order. Each action gets a UUID tracked in etcd so it won't run twice, even after a crash.
+
+## Two modes
+
+**Centralized** -- A single Conductor instance talks directly to all clusters via their Kubernetes APIs. Simple, no coordination needed.
+
+**Distributed** -- One Conductor instance per cluster. They elect a leader via etcd. The leader evaluates conditions and tells followers to execute actions through a REST API. Epoch-based fencing prevents stale leaders from issuing commands after a new leader is elected.
+
+## Conditions
+
+| Type | What it checks |
+|------|----------------|
+| `endpoint_value` | HTTP response body against a numeric value (`eq`, `lt`, `gt`, ...) |
+| `endpoint_success` | Whether an HTTP endpoint returns a successful response |
+| `prometheus_metric` | A Prometheus metric value against a threshold |
+| `k8s_deployment_ready` | Whether a deployment has the expected replica count |
+| `always_true` | Always passes (useful for one-shot tasks) |
+
+## Actions
+
+| Type | What it does |
+|------|--------------|
+| `k8s_scale_deployment` | Scale a deployment's replicas |
+| `k8s_restart_deployment` | Rolling restart a deployment |
+| `k8s_wait_deployment_rollout` | Block until rollout completes |
+| `k8s_update_configmap` | Update a key in a ConfigMap |
+| `k8s_exec_deployment` | Run a command inside a pod |
+| `config_value_sum` | Distribute a numeric value across ConfigMaps on multiple clusters |
+| `endpoint` | Make an HTTP request |
+| `delay` | Wait for a duration |
+| `echo` | Log a message |
+
+## Getting started
+
+Requires Go 1.25.2+ and a running etcd instance (docker-compose provided).
+
+```bash
+# Start a local etcd cluster
+make docker-up
+
+# Build
+make build
+
+# Run in centralized mode
+./bin/conductor centralized config/config.centralized.yaml
+
+# Or distributed mode
+./bin/conductor distributed config/config.distributed.yaml
+```
+
+## Configuration
+
+### Centralized
+
+```yaml
+kubeconfig_locations:
+  - /path/to/cluster1-kubeconfig.yml
+  - /path/to/cluster2-kubeconfig.yml
+
+db:
+  - http://localhost:2379
+
+tasks:
+  # ...
+```
+
+### Distributed
 
 ```yaml
 name: instance-1
 
-kubeconfig_locations:
-  - /path/to/kubeconfig.yml
-
 db:
-  - http://localhost:2379
+  - http://etcd1:2379
+  - http://etcd2:2379
 
 server:
   port: 8080
 
 tasks:
-  # Tasks definition same as centralized mode
+  # ...
 ```
 
-## Task Definition
+In distributed mode, `member` fields in actions point to follower HTTP endpoints (e.g. `http://192.168.1.111:8080`) instead of Kubernetes API servers directly.
 
-### Condition Types
+## Project layout
 
-| Type | Description |
-|------|-------------|
-| `endpoint_value` | Check HTTP endpoint response value |
-| `endpoint_success` | Check if HTTP endpoint returns success |
-| `prometheus_metric` | Check Prometheus metric value |
-| `k8s_deployment_ready` | Check if Kubernetes deployment is ready |
-| `always_true` | Always evaluates to true |
-
-### Action Types
-
-| Type | Description |
-|------|-------------|
-| `k8s_scale_deployment` | Scale a Kubernetes deployment |
-| `k8s_restart_deployment` | Restart a Kubernetes deployment |
-| `k8s_wait_deployment_rollout` | Wait for deployment rollout |
-| `k8s_update_configmap` | Update a ConfigMap |
-| `k8s_exec_deployment` | Execute command in deployment |
-| `endpoint` | Make HTTP request |
-| `delay` | Wait for specified duration |
-| `config_value_sum` | Sum values across ConfigMaps |
-| `echo` | Log a message |
-
-## How It Works
-
-### Task Execution Flow
-
-1. **Condition Evaluation**: Conductor continuously monitors conditions
-2. **Outbox Entry**: When conditions are met, task is added to outbox
-3. **Idempotency Check**: Before each action, check if already executed
-4. **Action Execution**: Execute action and track with unique ID
-5. **Progress Tracking**: Update task progress in outbox
-6. **Cleanup**: Remove task from outbox when complete
-
-### Leader Election (Distributed Mode)
-
-1. Instances campaign for leadership via etcd
-2. Winner increments epoch number atomically
-3. Leader executes tasks, followers accept commands
-4. If leader fails, new leader is elected with new epoch
-5. Zombie leaders are rejected due to epoch mismatch
-
-### Idempotency
-
-Each task action is assigned a unique UUID. Before execution:
-1. Check if UUID already executed
-2. If yes, skip (safe retry)
-3. If no, execute and record UUID
+```
+cmd/              Entry point
+internal/
+  cluster/        Core polling loop and outbox interface
+    centralized/  Centralized mode outbox + execution
+    distributed/  Leader election, distributed outbox
+  task/           Condition/action types and marshalling
+    common/       Shared condition/action implementations
+    centralized/  Centralized-specific implementations
+    distributed/  Distributed-specific (HTTP-delegated) implementations
+  k8s/            Kubernetes client wrapper
+  server/         HTTP server for distributed mode followers
+  utils/          Config loading
+config/           Example configs
+deployment/       Docker-compose for etcd, K8s manifests
+docs/             Architecture and flow diagrams
+```
 
 ## Development
 
-### Project Structure
-
-```
-conductor/
-├── cmd/
-│   └── main.go              # Application entry point
-├── internal/
-│   ├── cluster/             # Cluster orchestration
-│   │   ├── centralized/     # Centralized mode implementation
-│   │   └── distributed/     # Distributed mode implementation
-│   ├── task/                # Task execution
-│   │   ├── common/          # Shared task types
-│   │   ├── centralized/     # Centralized task handling
-│   │   └── distributed/     # Distributed task handling
-│   ├── k8s/                 # Kubernetes client
-│   ├── server/              # HTTP server (distributed mode)
-│   └── utils/               # Utilities
-├── config/                  # Example configurations
-├── deployment/              # Kubernetes manifests
-└── docs/                    # Documentation
+```bash
+make test             # Run tests
+make test-coverage    # Tests + HTML coverage report
+make fmt              # Format code
+make vet              # Run go vet
 ```
 
-### Makefile Targets
+## Docs
 
-| Target | Description |
-|--------|-------------|
-| `make build` | Build the application |
-| `make run` | Run the application |
-| `make test` | Run tests |
-| `make test-coverage` | Run tests with coverage report |
-| `make fmt` | Format code |
-| `make vet` | Run go vet |
-| `make docker-up` | Start etcd cluster |
-| `make docker-down` | Stop etcd cluster |
-
-## Documentation
-
-- [Centralized Architecture](docs/architecture-centralized.md)
-- [Distributed Architecture](docs/architecture-distributed.md)
-- [Centralized Outbox Flow](docs/outbox-centralized.md)
-- [Distributed Outbox Flow](docs/outbox-distributed.md)
-- [Task Execution Flow](docs/flow-distributed.md)
-- [Zombie Leader Prevention](docs/zombi-leader.md)
-
-## Use Cases
-
-### Example: Load Balancing Across Clusters
-
-Conductor can automatically scale services between clusters based on load:
-
-1. Monitor UE (User Equipment) count on each cluster
-2. When cluster 1 is underutilized (< 10 UEs) and cluster 2 has capacity (< 150 UEs)
-3. Scale down services on cluster 1
-4. Delegate load to cluster 2
-5. Monitor and reverse when conditions change
-
-### Example: Disaster Recovery
-
-1. Detect primary cluster failure via endpoint checks
-2. Automatically failover to secondary cluster
-3. Update DNS/ConfigMaps to route traffic
-4. Restore primary cluster when available
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run `make fmt` and `make test`
-5. Submit a pull request
-
-## License
-
-This project is open source. See project files for license details.
+- [Centralized architecture](docs/architecture-centralized.md)
+- [Distributed architecture](docs/architecture-distributed.md)
+- [Outbox flow (centralized)](docs/outbox-centralized.md)
+- [Outbox flow (distributed)](docs/outbox-distributed.md)
+- [Task execution flow](docs/flow-distributed.md)
+- [Zombie leader prevention](docs/zombi-leader.md)
