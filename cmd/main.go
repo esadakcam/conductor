@@ -120,10 +120,10 @@ func initDistributedMode(ctx context.Context, cancel context.CancelFunc) {
 
 	// Initialize Epoch Validator
 	epochValidator := server.NewEpochValidator(etcdClient)
-	idempotencyValidator := server.NewIdempotencyValidator(etcdClient, config.Name)
+	idempotencyGuard := server.NewEtcdIdempotencyGuard(etcdClient, config.Name)
 
 	// Initialize HTTP Server
-	srvHandler := server.NewHandler(k8sClient, epochValidator, idempotencyValidator, etcdClient, config.Name)
+	srvHandler := server.NewHandler(k8sClient, epochValidator, idempotencyGuard)
 	srv := server.NewServer(server.Config{Port: config.Server.Port}, srvHandler)
 
 	// Start server in background

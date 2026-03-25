@@ -9,8 +9,10 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-const DefaultEpochKey = "/conductor/epoch"
-const DefaultIdempotencyKeyPrefix = "/conductor/idempotency"
+const (
+	DefaultEpochKey             = "/conductor/epoch"
+	DefaultIdempotencyKeyPrefix = "/conductor/idempotency"
+)
 
 // EpochValidator validates if the incoming epoch is valid
 type EpochValidator struct {
@@ -18,14 +20,17 @@ type EpochValidator struct {
 	epochKey string
 }
 
-type IdempotencyValidator struct {
+// EtcdIdempotencyGuard implements IdempotencyGuard using an etcd
+// transaction so that Reserve is atomic: only one caller wins when
+// concurrent requests carry the same idempotency id.
+type EtcdIdempotencyGuard struct {
 	client               *clientv3.Client
 	idempotencyKeyPrefix string
 	name                 string
 }
 
-func NewIdempotencyValidator(client *clientv3.Client, name string) *IdempotencyValidator {
-	return &IdempotencyValidator{
+func NewEtcdIdempotencyGuard(client *clientv3.Client, name string) *EtcdIdempotencyGuard {
+	return &EtcdIdempotencyGuard{
 		client:               client,
 		idempotencyKeyPrefix: DefaultIdempotencyKeyPrefix,
 		name:                 name,
@@ -66,20 +71,31 @@ func (v *EpochValidator) Validate(ctx context.Context, toValidate any) (bool, er
 	return requestEpoch == currentEpoch, nil
 }
 
-func (v *IdempotencyValidator) Validate(ctx context.Context, toValidate any) (bool, error) {
-	idempotencyId, ok := toValidate.(string)
-	if !ok {
-		return true, fmt.Errorf("toValidate is not a string")
-	}
-	resp, err := v.client.Get(ctx, fmt.Sprintf("%s/%s/%s", v.idempotencyKeyPrefix, v.name, idempotencyId))
+// Reserve atomically creates the idempotency key only if it does not
+// already exist (etcd Txn with CreateRevision == 0).  Returns true when
+// the key was successfully reserved for this caller, false when it was
+// already present (i.e. a previous request with the same id succeeded).
+func (g *EtcdIdempotencyGuard) Reserve(ctx context.Context, id string) (bool, error) {
+	key := fmt.Sprintf("%s/%s/%s", g.idempotencyKeyPrefix, g.name, id)
+	txnResp, err := g.client.Txn(ctx).
+		If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0)).
+		Then(clientv3.OpPut(key, "reserved")).
+		Commit()
 	if err != nil {
-		logger.Errorf("IdempotencyValidator: failed to read idempotency key from etcd: %v", err)
-		return true, fmt.Errorf("failed to read idempotency key from etcd: %w", err)
+		logger.Errorf("EtcdIdempotencyGuard: txn failed for key %s: %v", key, err)
+		return false, fmt.Errorf("failed to reserve idempotency key: %w", err)
 	}
+	return txnResp.Succeeded, nil
+}
 
-	if len(resp.Kvs) == 0 {
-		return true, nil
+// Release removes a previously reserved key so that a retry with the
+// same id can proceed.  Called when the action fails after reservation.
+func (g *EtcdIdempotencyGuard) Release(ctx context.Context, id string) error {
+	key := fmt.Sprintf("%s/%s/%s", g.idempotencyKeyPrefix, g.name, id)
+	_, err := g.client.Delete(ctx, key)
+	if err != nil {
+		logger.Errorf("EtcdIdempotencyGuard: failed to release key %s: %v", key, err)
+		return fmt.Errorf("failed to release idempotency key: %w", err)
 	}
-
-	return false, nil
+	return nil
 }

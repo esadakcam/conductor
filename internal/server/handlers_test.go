@@ -32,6 +32,28 @@ func (m *MockValidator) Validate(ctx context.Context, toValidate any) (bool, err
 	return true, nil
 }
 
+// MockIdempotencyGuard satisfies IdempotencyGuard interface
+type MockIdempotencyGuard struct {
+	ReserveFunc func(ctx context.Context, id string) (bool, error)
+	ReleaseFunc func(ctx context.Context, id string) error
+	ReleasedIDs []string
+}
+
+func (m *MockIdempotencyGuard) Reserve(ctx context.Context, id string) (bool, error) {
+	if m.ReserveFunc != nil {
+		return m.ReserveFunc(ctx, id)
+	}
+	return true, nil
+}
+
+func (m *MockIdempotencyGuard) Release(ctx context.Context, id string) error {
+	m.ReleasedIDs = append(m.ReleasedIDs, id)
+	if m.ReleaseFunc != nil {
+		return m.ReleaseFunc(ctx, id)
+	}
+	return nil
+}
+
 // MockKubernetesClient satisfies KubernetesClient interface for unit tests
 type MockKubernetesClient struct {
 	GetFunc                      func(ctx context.Context, resource, namespace, name string) (*unstructured.Unstructured, error)
@@ -215,7 +237,8 @@ func TestIntegrationHandlers(t *testing.T) {
 				return true, nil
 			},
 		}
-		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(k8sClient, mockValidator, mockGuard)
 
 		// Create Pod
 		podName := "test-pod"
@@ -281,7 +304,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
 		mockValidator := &MockValidator{}
-		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(k8sClient, mockValidator, mockGuard)
 
 		// Create a configmap directly to list
 		cmName := "test-cm"
@@ -335,7 +359,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
 		mockValidator := &MockValidator{}
-		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(k8sClient, mockValidator, mockGuard)
 
 		// Create initial configmap
 		cmName := "update-test-cm"
@@ -400,7 +425,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
 		mockValidator := &MockValidator{}
-		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(k8sClient, mockValidator, mockGuard)
 
 		// Create initial configmap
 		cmName := "patch-test-cm"
@@ -479,7 +505,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
 		mockValidator := &MockValidator{}
-		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(k8sClient, mockValidator, mockGuard)
 
 		cmName := "delete-test-cm"
 		cm := &unstructured.Unstructured{
@@ -525,7 +552,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
 		mockValidator := &MockValidator{}
-		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(k8sClient, mockValidator, mockGuard)
 
 		// Create a deployment
 		deployName := "exec-test-deploy"
@@ -649,7 +677,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
 		mockValidator := &MockValidator{}
-		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(k8sClient, mockValidator, mockGuard)
 
 		// Create a deployment
 		deployName := "exec-fail-deploy"
@@ -765,7 +794,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
 		mockValidator := &MockValidator{}
-		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(k8sClient, mockValidator, mockGuard)
 
 		req := httptest.NewRequest("POST", "/api/v1/exec/deployments/"+ns+"/test-deploy", bytes.NewReader([]byte("invalid json")))
 		req.SetPathValue("namespace", ns)
@@ -785,7 +815,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
 		mockValidator := &MockValidator{}
-		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(k8sClient, mockValidator, mockGuard)
 
 		execBody := ExecDeploymentRequest{
 			Epoch:   1,
@@ -817,8 +848,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
 		// Use separate validators: idempotency passes, epoch fails
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return true, nil
 			},
 		}
@@ -827,7 +858,7 @@ func TestIntegrationHandlers(t *testing.T) {
 				return false, nil
 			},
 		}
-		h := NewHandler(k8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(k8sClient, epochValidator, idempotencyGuard)
 
 		execBody := ExecDeploymentRequest{
 			Epoch:   1,
@@ -853,7 +884,8 @@ func TestIntegrationHandlers(t *testing.T) {
 		defer cleanupTestNamespace(t, k8sClient, ns)
 
 		mockValidator := &MockValidator{}
-		h := NewHandler(k8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(k8sClient, mockValidator, mockGuard)
 
 		execBody := ExecDeploymentRequest{
 			Epoch:   1,
@@ -882,7 +914,8 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleCreate_MissingIdempotencyId", func(t *testing.T) {
 		mockValidator := &MockValidator{}
-		h := NewHandler(mockK8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(mockK8sClient, mockValidator, mockGuard)
 
 		body := CreateRequest{
 			Epoch: 1,
@@ -915,12 +948,12 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleCreate_IdempotencyAlreadyProcessed", func(t *testing.T) {
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return false, nil // Already processed
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := CreateRequest{
 			Epoch: 1,
@@ -947,12 +980,12 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleCreate_IdempotencyValidationError", func(t *testing.T) {
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return false, errors.New("etcd connection failed")
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := CreateRequest{
 			Epoch: 1,
@@ -985,7 +1018,8 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleUpdate_MissingIdempotencyId", func(t *testing.T) {
 		mockValidator := &MockValidator{}
-		h := NewHandler(mockK8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(mockK8sClient, mockValidator, mockGuard)
 
 		body := UpdateRequest{
 			Epoch: 1,
@@ -1019,12 +1053,12 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleUpdate_IdempotencyAlreadyProcessed", func(t *testing.T) {
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return false, nil // Already processed
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := UpdateRequest{
 			Epoch: 1,
@@ -1052,7 +1086,8 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandlePatch_MissingIdempotencyId", func(t *testing.T) {
 		mockValidator := &MockValidator{}
-		h := NewHandler(mockK8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(mockK8sClient, mockValidator, mockGuard)
 
 		body := map[string]interface{}{
 			"epoch": 1,
@@ -1082,12 +1117,12 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandlePatch_IdempotencyAlreadyProcessed", func(t *testing.T) {
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return false, nil // Already processed
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := map[string]interface{}{
 			"epoch": 1,
@@ -1111,7 +1146,8 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleDelete_MissingIdempotencyId", func(t *testing.T) {
 		mockValidator := &MockValidator{}
-		h := NewHandler(mockK8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(mockK8sClient, mockValidator, mockGuard)
 
 		body := DeleteRequest{Epoch: 1}
 		bodyBytes, _ := json.Marshal(body)
@@ -1138,12 +1174,12 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleDelete_IdempotencyAlreadyProcessed", func(t *testing.T) {
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return false, nil // Already processed
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := DeleteRequest{Epoch: 1}
 		bodyBytes, _ := json.Marshal(body)
@@ -1164,7 +1200,8 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleExecDeployment_MissingIdempotencyId", func(t *testing.T) {
 		mockValidator := &MockValidator{}
-		h := NewHandler(mockK8sClient, mockValidator, mockValidator, nil, "")
+		mockGuard := &MockIdempotencyGuard{}
+		h := NewHandler(mockK8sClient, mockValidator, mockGuard)
 
 		body := ExecDeploymentRequest{
 			Epoch:   1,
@@ -1193,12 +1230,12 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleExecDeployment_IdempotencyAlreadyProcessed", func(t *testing.T) {
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return false, nil // Already processed
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := ExecDeploymentRequest{
 			Epoch:   1,
@@ -1221,12 +1258,12 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleExecDeployment_IdempotencyValidationError", func(t *testing.T) {
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return false, errors.New("etcd connection failed")
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := ExecDeploymentRequest{
 			Epoch:   1,
@@ -1254,15 +1291,15 @@ func TestIdempotency(t *testing.T) {
 	})
 
 	t.Run("HandleCreate_IdempotencyValidatorReceivesCorrectId", func(t *testing.T) {
-		var receivedIdempotencyId any
+		var receivedIdempotencyId string
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
-				receivedIdempotencyId = toValidate
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
+				receivedIdempotencyId = id
 				return true, nil
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := CreateRequest{
 			Epoch: 1,
@@ -1289,12 +1326,12 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleUpdate_IdempotencyValidationError", func(t *testing.T) {
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return false, errors.New("storage unavailable")
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := UpdateRequest{
 			Epoch: 1,
@@ -1328,12 +1365,12 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandlePatch_IdempotencyValidationError", func(t *testing.T) {
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return false, errors.New("storage unavailable")
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := map[string]interface{}{
 			"epoch": 1,
@@ -1363,12 +1400,12 @@ func TestIdempotency(t *testing.T) {
 
 	t.Run("HandleDelete_IdempotencyValidationError", func(t *testing.T) {
 		epochValidator := &MockValidator{}
-		idempotencyValidator := &MockValidator{
-			ValidateFunc: func(ctx context.Context, toValidate any) (bool, error) {
+		idempotencyGuard := &MockIdempotencyGuard{
+			ReserveFunc: func(ctx context.Context, id string) (bool, error) {
 				return false, errors.New("storage unavailable")
 			},
 		}
-		h := NewHandler(mockK8sClient, epochValidator, idempotencyValidator, nil, "")
+		h := NewHandler(mockK8sClient, epochValidator, idempotencyGuard)
 
 		body := DeleteRequest{Epoch: 1}
 		bodyBytes, _ := json.Marshal(body)

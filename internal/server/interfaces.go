@@ -24,3 +24,13 @@ type KubernetesClient interface {
 type Validator interface {
 	Validate(ctx context.Context, toValidate any) (bool, error)
 }
+
+// IdempotencyGuard atomically reserves an idempotency key before action
+// execution and releases it if the action fails. Reserve must be
+// implemented with compare-and-swap semantics (e.g. etcd Txn with
+// CreateRevision == 0) so that concurrent calls with the same id are
+// serialised and at most one caller proceeds.
+type IdempotencyGuard interface {
+	Reserve(ctx context.Context, id string) (bool, error)
+	Release(ctx context.Context, id string) error
+}
