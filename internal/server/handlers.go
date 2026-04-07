@@ -77,20 +77,20 @@ func (h *Handler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 	var req CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Warnf("Invalid request body for create %s/%s: %v", resource, namespace, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if !h.validateEpoch(w, r.Context(), req.Epoch, fmt.Sprintf("create %s/%s", resource, namespace)) {
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		return
 	}
 
 	objMap, ok := req.Object.(map[string]interface{})
 	if !ok {
 		logger.Warnf("Invalid object format for create %s/%s", resource, namespace)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "invalid object format")
 		return
 	}
@@ -99,7 +99,7 @@ func (h *Handler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 	created, err := h.k8sClient.Create(r.Context(), resource, namespace, u)
 	if err != nil {
 		logger.Errorf("Failed to create resource %s/%s: %v", resource, namespace, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -122,20 +122,20 @@ func (h *Handler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	var req UpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Warnf("Invalid request body for update %s/%s/%s: %v", resource, namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if !h.validateEpoch(w, r.Context(), req.Epoch, fmt.Sprintf("update %s/%s/%s", resource, namespace, name)) {
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		return
 	}
 
 	objMap, ok := req.Object.(map[string]interface{})
 	if !ok {
 		logger.Warnf("Invalid object format for update %s/%s/%s", resource, namespace, name)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "invalid object format")
 		return
 	}
@@ -148,7 +148,7 @@ func (h *Handler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.k8sClient.Update(r.Context(), resource, namespace, u)
 	if err != nil {
 		logger.Errorf("Failed to update resource %s/%s/%s: %v", resource, namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -171,14 +171,14 @@ func (h *Handler) HandlePatch(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		logger.Warnf("Failed to read body for patch %s/%s/%s: %v", resource, namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
 	if err := json.Unmarshal(bodyBytes, &bodyMap); err != nil {
 		logger.Warnf("Invalid JSON for patch %s/%s/%s: %v", resource, namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
@@ -186,21 +186,21 @@ func (h *Handler) HandlePatch(w http.ResponseWriter, r *http.Request) {
 	epochVal, ok := bodyMap["epoch"].(float64)
 	if !ok {
 		logger.Warnf("Missing or invalid epoch for patch %s/%s/%s", resource, namespace, name)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "epoch is required and must be a number")
 		return
 	}
 	epoch := int64(epochVal)
 
 	if !h.validateEpoch(w, r.Context(), epoch, fmt.Sprintf("patch %s/%s/%s", resource, namespace, name)) {
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		return
 	}
 
 	patchData, ok := bodyMap["patch"]
 	if !ok {
 		logger.Warnf("Missing patch data for patch %s/%s/%s", resource, namespace, name)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "patch data is required")
 		return
 	}
@@ -208,7 +208,7 @@ func (h *Handler) HandlePatch(w http.ResponseWriter, r *http.Request) {
 	patchBytes, err := json.Marshal(patchData)
 	if err != nil {
 		logger.Errorf("Failed to marshal patch data for %s/%s/%s: %v", resource, namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusInternalServerError, "failed to marshal patch data")
 		return
 	}
@@ -216,7 +216,7 @@ func (h *Handler) HandlePatch(w http.ResponseWriter, r *http.Request) {
 	patched, err := h.k8sClient.Patch(r.Context(), resource, namespace, name, types.MergePatchType, patchBytes)
 	if err != nil {
 		logger.Errorf("Failed to patch resource %s/%s/%s: %v", resource, namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -239,19 +239,19 @@ func (h *Handler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	var req DeleteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Warnf("Invalid request body for delete %s/%s/%s: %v", resource, namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if !h.validateEpoch(w, r.Context(), req.Epoch, fmt.Sprintf("delete %s/%s/%s", resource, namespace, name)) {
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		return
 	}
 
 	if err := h.k8sClient.Delete(r.Context(), resource, namespace, name); err != nil {
 		logger.Errorf("Failed to delete resource %s/%s/%s: %v", resource, namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -274,19 +274,19 @@ func (h *Handler) HandleExecDeployment(w http.ResponseWriter, r *http.Request) {
 	var req ExecDeploymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Warnf("Invalid request body for exec deployment %s/%s: %v", namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if !h.validateEpoch(w, r.Context(), req.Epoch, fmt.Sprintf("exec deployment %s/%s", namespace, name)) {
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		return
 	}
 
 	if len(req.Command) == 0 {
 		logger.Warnf("Missing command for exec deployment %s/%s", namespace, name)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "command is required")
 		return
 	}
@@ -294,7 +294,7 @@ func (h *Handler) HandleExecDeployment(w http.ResponseWriter, r *http.Request) {
 	results, err := h.k8sClient.ExecDeployment(r.Context(), namespace, name, req.Container, req.Command)
 	if err != nil {
 		logger.Errorf("Failed to exec on deployment %s/%s: %v", namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -340,13 +340,13 @@ func (h *Handler) HandleWaitDeploymentRollout(w http.ResponseWriter, r *http.Req
 	var req WaitDeploymentRolloutRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Warnf("Invalid request body for wait rollout deployment %s/%s: %v", namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if !h.validateEpoch(w, r.Context(), req.Epoch, fmt.Sprintf("wait rollout deployment %s/%s", namespace, name)) {
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		return
 	}
 
@@ -355,7 +355,7 @@ func (h *Handler) HandleWaitDeploymentRollout(w http.ResponseWriter, r *http.Req
 		parsed, err := time.ParseDuration(req.Timeout)
 		if err != nil {
 			logger.Warnf("Invalid timeout format for wait rollout deployment %s/%s: %v", namespace, name, err)
-			h.releaseIdempotencyKey(r.Context(), idempotencyId)
+			h.releaseIdempotencyKey(idempotencyId)
 			h.sendError(w, http.StatusBadRequest, "invalid timeout format")
 			return
 		}
@@ -365,7 +365,7 @@ func (h *Handler) HandleWaitDeploymentRollout(w http.ResponseWriter, r *http.Req
 	err := h.k8sClient.WaitForDeploymentRollout(r.Context(), namespace, name, timeout)
 	if err != nil {
 		logger.Errorf("Failed to wait for rollout of deployment %s/%s: %v", namespace, name, err)
-		h.releaseIdempotencyKey(r.Context(), idempotencyId)
+		h.releaseIdempotencyKey(idempotencyId)
 		h.sendError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -418,11 +418,13 @@ func (h *Handler) reserveIdempotencyKey(w http.ResponseWriter, r *http.Request) 
 	return idempotencyId, true
 }
 
-func (h *Handler) releaseIdempotencyKey(ctx context.Context, idempotencyId string) {
+func (h *Handler) releaseIdempotencyKey(idempotencyId string) {
 	if idempotencyId == "" {
 		return
 	}
-	if err := h.idempotencyGuard.Release(ctx, idempotencyId); err != nil {
+	releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := h.idempotencyGuard.Release(releaseCtx, idempotencyId); err != nil {
 		logger.Errorf("Failed to release idempotency key %s: %v", idempotencyId, err)
 	}
 }
