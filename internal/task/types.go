@@ -143,6 +143,14 @@ type ActionConfigValueSumData struct {
 	Members       []string   `yaml:"members"` // todo make it a struct and pass auth info
 }
 
+// ActionK8sExecDeploymentData executes a command on all pods of a deployment.
+//
+// In centralized mode, this action provides at-least-once semantics. Idempotency
+// is tracked per-pod via the conductor.io/idempotency-key label, but because
+// Kubernetes does not support an atomic exec-and-patch operation, there is an
+// unavoidable window between a successful exec and the subsequent label patch.
+// If the controller crashes in that window, the command will be re-executed on
+// the next retry. Commands used with this action MUST be idempotent.
 type ActionK8sExecDeploymentData struct {
 	Type       ActionType `yaml:"type"`
 	Member     string     `yaml:"member"`
@@ -185,17 +193,19 @@ type ActionK8sScaleDeploymentData struct {
 }
 
 // Backward compatibility aliases
-type ConditionEndpointSuccess = ConditionEndpointSuccessData
-type ConditionAlwaysTrue = ConditionAlwaysTrueData
-type ConditionEndpointValue = ConditionEndpointValueData
-type ConditionPrometheusMetric = ConditionPrometheusMetricData
-type ConditionK8sDeploymentReady = ConditionK8sDeploymentReadyData
-type ActionEndpoint = ActionEndpointData
-type ActionEcho = ActionEchoData
-type ActionDelay = ActionDelayData
-type ActionConfigValueSum = ActionConfigValueSumData
-type ActionK8sExecDeployment = ActionK8sExecDeploymentData
-type ActionK8sRestartDeployment = ActionK8sRestartDeploymentData
-type ActionK8sWaitDeploymentRollout = ActionK8sWaitDeploymentRolloutData
-type ActionK8sUpdateConfigMap = ActionK8sUpdateConfigMapData
-type ActionK8sScaleDeployment = ActionK8sScaleDeploymentData
+type (
+	ConditionEndpointSuccess       = ConditionEndpointSuccessData
+	ConditionAlwaysTrue            = ConditionAlwaysTrueData
+	ConditionEndpointValue         = ConditionEndpointValueData
+	ConditionPrometheusMetric      = ConditionPrometheusMetricData
+	ConditionK8sDeploymentReady    = ConditionK8sDeploymentReadyData
+	ActionEndpoint                 = ActionEndpointData
+	ActionEcho                     = ActionEchoData
+	ActionDelay                    = ActionDelayData
+	ActionConfigValueSum           = ActionConfigValueSumData
+	ActionK8sExecDeployment        = ActionK8sExecDeploymentData
+	ActionK8sRestartDeployment     = ActionK8sRestartDeploymentData
+	ActionK8sWaitDeploymentRollout = ActionK8sWaitDeploymentRolloutData
+	ActionK8sUpdateConfigMap       = ActionK8sUpdateConfigMapData
+	ActionK8sScaleDeployment       = ActionK8sScaleDeploymentData
+)
