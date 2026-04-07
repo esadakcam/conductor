@@ -191,21 +191,3 @@ type ActionK8sScaleDeploymentData struct {
 	Namespace  string     `yaml:"namespace,omitempty"`
 	Replicas   int32      `yaml:"replicas"`
 }
-
-// Backward compatibility aliases
-type (
-	ConditionEndpointSuccess       = ConditionEndpointSuccessData
-	ConditionAlwaysTrue            = ConditionAlwaysTrueData
-	ConditionEndpointValue         = ConditionEndpointValueData
-	ConditionPrometheusMetric      = ConditionPrometheusMetricData
-	ConditionK8sDeploymentReady    = ConditionK8sDeploymentReadyData
-	ActionEndpoint                 = ActionEndpointData
-	ActionEcho                     = ActionEchoData
-	ActionDelay                    = ActionDelayData
-	ActionConfigValueSum           = ActionConfigValueSumData
-	ActionK8sExecDeployment        = ActionK8sExecDeploymentData
-	ActionK8sRestartDeployment     = ActionK8sRestartDeploymentData
-	ActionK8sWaitDeploymentRollout = ActionK8sWaitDeploymentRolloutData
-	ActionK8sUpdateConfigMap       = ActionK8sUpdateConfigMapData
-	ActionK8sScaleDeployment       = ActionK8sScaleDeploymentData
-)
