@@ -79,13 +79,39 @@ func (g *EtcdIdempotencyGuard) Reserve(ctx context.Context, id string) (bool, er
 	key := fmt.Sprintf("%s/%s/%s", g.idempotencyKeyPrefix, g.name, id)
 	txnResp, err := g.client.Txn(ctx).
 		If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0)).
-		Then(clientv3.OpPut(key, "reserved")).
+		Then(clientv3.OpPut(key, "pending")).
+		Else(clientv3.OpGet(key)).
 		Commit()
 	if err != nil {
 		logger.Errorf("EtcdIdempotencyGuard: txn failed for key %s: %v", key, err)
 		return false, fmt.Errorf("failed to reserve idempotency key: %w", err)
 	}
-	return txnResp.Succeeded, nil
+	if txnResp.Succeeded {
+		return true, nil
+	}
+
+	rangeResp := txnResp.Responses[0].GetResponseRange()
+	if len(rangeResp.Kvs) == 0 {
+		return false, nil
+	}
+	value := string(rangeResp.Kvs[0].Value)
+	if value == "pending" {
+		return true, nil
+	}
+	// "completed" or any other value → already done
+	return false, nil
+}
+
+// Complete upgrades the idempotency marker from "pending" to "completed".
+// Must be called after the side-effect (e.g. K8s operation) succeeds.
+func (g *EtcdIdempotencyGuard) Complete(ctx context.Context, id string) error {
+	key := fmt.Sprintf("%s/%s/%s", g.idempotencyKeyPrefix, g.name, id)
+	_, err := g.client.Put(ctx, key, "completed")
+	if err != nil {
+		logger.Errorf("EtcdIdempotencyGuard: failed to complete key %s: %v", key, err)
+		return fmt.Errorf("failed to complete idempotency key: %w", err)
+	}
+	return nil
 }
 
 // Release removes a previously reserved key so that a retry with the

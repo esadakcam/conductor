@@ -32,5 +32,6 @@ type Validator interface {
 // serialised and at most one caller proceeds.
 type IdempotencyGuard interface {
 	Reserve(ctx context.Context, id string) (bool, error)
+	Complete(ctx context.Context, id string) error
 	Release(ctx context.Context, id string) error
 }

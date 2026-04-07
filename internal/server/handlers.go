@@ -103,6 +103,7 @@ func (h *Handler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.completeIdempotencyKey(idempotencyId)
 	createdName := created.GetName()
 	logger.Infof("Successfully created resource %s/%s/%s (epoch: %d)", resource, namespace, createdName, req.Epoch)
 	h.sendJSON(w, http.StatusCreated, created)
@@ -152,6 +153,7 @@ func (h *Handler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.completeIdempotencyKey(idempotencyId)
 	logger.Infof("Successfully updated resource %s/%s/%s (epoch: %d)", resource, namespace, name, req.Epoch)
 	h.sendJSON(w, http.StatusOK, updated)
 }
@@ -221,6 +223,7 @@ func (h *Handler) HandlePatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.completeIdempotencyKey(idempotencyId)
 	logger.Infof("Successfully patched resource %s/%s/%s (epoch: %d)", resource, namespace, name, epoch)
 	h.sendJSON(w, http.StatusOK, patched)
 }
@@ -256,6 +259,7 @@ func (h *Handler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.completeIdempotencyKey(idempotencyId)
 	logger.Infof("Successfully deleted resource %s/%s/%s (epoch: %d)", resource, namespace, name, req.Epoch)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -322,6 +326,7 @@ func (h *Handler) HandleExecDeployment(w http.ResponseWriter, r *http.Request) {
 		Results:        jsonResults,
 	}
 
+	h.completeIdempotencyKey(idempotencyId)
 	logger.Infof("Successfully executed command on deployment %s/%s (epoch: %d, pods: %d)", namespace, name, req.Epoch, len(results))
 	h.sendJSON(w, http.StatusOK, response)
 }
@@ -376,6 +381,7 @@ func (h *Handler) HandleWaitDeploymentRollout(w http.ResponseWriter, r *http.Req
 		Status:         "completed",
 	}
 
+	h.completeIdempotencyKey(idempotencyId)
 	logger.Infof("Successfully waited for deployment rollout %s/%s (epoch: %d)", namespace, name, req.Epoch)
 	h.sendJSON(w, http.StatusOK, response)
 }
@@ -416,6 +422,17 @@ func (h *Handler) reserveIdempotencyKey(w http.ResponseWriter, r *http.Request) 
 		return "", false
 	}
 	return idempotencyId, true
+}
+
+func (h *Handler) completeIdempotencyKey(idempotencyId string) {
+	if idempotencyId == "" {
+		return
+	}
+	completeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := h.idempotencyGuard.Complete(completeCtx, idempotencyId); err != nil {
+		logger.Errorf("Failed to complete idempotency key %s: %v", idempotencyId, err)
+	}
 }
 
 func (h *Handler) releaseIdempotencyKey(idempotencyId string) {

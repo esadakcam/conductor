@@ -34,9 +34,11 @@ func (m *MockValidator) Validate(ctx context.Context, toValidate any) (bool, err
 
 // MockIdempotencyGuard satisfies IdempotencyGuard interface
 type MockIdempotencyGuard struct {
-	ReserveFunc func(ctx context.Context, id string) (bool, error)
-	ReleaseFunc func(ctx context.Context, id string) error
-	ReleasedIDs []string
+	ReserveFunc  func(ctx context.Context, id string) (bool, error)
+	CompleteFunc func(ctx context.Context, id string) error
+	ReleaseFunc  func(ctx context.Context, id string) error
+	CompletedIDs []string
+	ReleasedIDs  []string
 }
 
 func (m *MockIdempotencyGuard) Reserve(ctx context.Context, id string) (bool, error) {
@@ -44,6 +46,14 @@ func (m *MockIdempotencyGuard) Reserve(ctx context.Context, id string) (bool, er
 		return m.ReserveFunc(ctx, id)
 	}
 	return true, nil
+}
+
+func (m *MockIdempotencyGuard) Complete(ctx context.Context, id string) error {
+	m.CompletedIDs = append(m.CompletedIDs, id)
+	if m.CompleteFunc != nil {
+		return m.CompleteFunc(ctx, id)
+	}
+	return nil
 }
 
 func (m *MockIdempotencyGuard) Release(ctx context.Context, id string) error {
